@@ -1,0 +1,2040 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mon Petit Playoff 🏀</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Space+Grotesk:wght@500;700;900&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --o:#FF5C1A;--ob:rgba(255,92,26,.1);--ob2:rgba(255,92,26,.18);
+  --dk:#0D0D0D;--dk2:#161616;--dk3:#1C1C1C;
+  --c:#1E1E1E;--c2:#232323;--bd:#272727;--bd2:#333;
+  --tx:#EFEFEF;--tx2:#888;--tx3:#444;
+  --g:#22C55E;--gb:rgba(34,197,94,.1);
+  --r:#EF4444;--rb:rgba(239,68,68,.1);
+  --gold:#F59E0B;--goldb:rgba(245,158,11,.1);
+  --j:#A855F7;--jb:rgba(168,85,247,.12);
+  --bl:#3B82F6;--blb:rgba(59,130,246,.1);
+  --rad:14px;--rads:10px;--radxs:7px;
+}
+html,body{background:var(--dk);color:var(--tx);font-family:'Inter',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+#root{min-height:100vh}
+button{cursor:pointer;border:none;background:none;font-family:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
+input{font-family:inherit;outline:none;border:none}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+.grot{font-family:'Space Grotesk',sans-serif}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.fi{animation:fadeIn .22s ease both}
+.su{animation:slideUp .28s cubic-bezier(.16,1,.3,1) both}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback,useMemo}=React;
+
+/* ════════════════════════════════════════
+   SYSTÈME DE POINTS
+════════════════════════════════════════ */
+// Vainqueur : cote × 10, arrondi (ex: 1.40→14, 2.60→26, 1.87→19)
+const calcWinPts=(odds,mult=1)=>Math.round(odds*10)*mult;
+// Scoreur : selon rang dans l'équipe
+const calcScorerPts=(rang,mult=1)=>{
+  if(rang===1)return 10*mult;
+  if(rang<=3)return 20*mult;
+  if(rang<=6)return 30*mult;
+  return 40*mult;
+};
+
+/* ════════════════════════════════════════
+   ÉQUIPES — Badges colorés (logos interdits par NBA/copyright)
+   Couleurs officielles, abréviations réelles
+════════════════════════════════════════ */
+const TEAMS={
+  OKC:{name:'Thunder',city:'OKC',abbr:'OKC',c1:'#007AC1',c2:'#EF3B24',conf:'Ouest',seed_w:1,reg_w:68,reg_l:14},
+  IND:{name:'Pacers',city:'Indiana',abbr:'IND',c1:'#002D62',c2:'#FDBB30',conf:'Est',seed_e:4,reg_w:50,reg_l:32},
+  MIN:{name:'T-Wolves',city:'Minnesota',abbr:'MIN',c1:'#236192',c2:'#9EA1A2',conf:'Ouest',seed_w:6,reg_w:49,reg_l:33},
+  NYK:{name:'Knicks',city:'New York',abbr:'NYK',c1:'#006BB6',c2:'#F58426',conf:'Est',seed_e:3,reg_w:51,reg_l:31},
+  BOS:{name:'Celtics',city:'Boston',abbr:'BOS',c1:'#007A33',c2:'#BA9653',conf:'Est',seed_e:2,reg_w:61,reg_l:21},
+  CLE:{name:'Cavaliers',city:'Cleveland',abbr:'CLE',c1:'#860038',c2:'#FDBB30',conf:'Est',seed_e:1,reg_w:64,reg_l:18},
+  DEN:{name:'Nuggets',city:'Denver',abbr:'DEN',c1:'#0E2240',c2:'#FEC524',conf:'Ouest',seed_w:4,reg_w:50,reg_l:32},
+  GSW:{name:'Warriors',city:'Golden State',abbr:'GSW',c1:'#1D428A',c2:'#FFC72C',conf:'Ouest',seed_w:7,reg_w:48,reg_l:34},
+  LAL:{name:'Lakers',city:'LA',abbr:'LAL',c1:'#552583',c2:'#FDB927',conf:'Ouest',seed_w:5,reg_w:45,reg_l:37},
+  MEM:{name:'Grizzlies',city:'Memphis',abbr:'MEM',c1:'#5D76A9',c2:'#12173F',conf:'Ouest',seed_w:2,reg_w:52,reg_l:30},
+  MIA:{name:'Heat',city:'Miami',abbr:'MIA',c1:'#98002E',c2:'#F9A01B',conf:'Est',seed_e:8,reg_w:41,reg_l:41},
+  MIL:{name:'Bucks',city:'Milwaukee',abbr:'MIL',c1:'#00471B',c2:'#EEE1C6',conf:'Est',seed_e:6,reg_w:48,reg_l:34},
+  ORL:{name:'Magic',city:'Orlando',abbr:'ORL',c1:'#0077C0',c2:'#C4CED4',conf:'Est',seed_e:7,reg_w:47,reg_l:35},
+  DET:{name:'Pistons',city:'Detroit',abbr:'DET',c1:'#C8102E',c2:'#1D42BA',conf:'Est',seed_e:5,reg_w:42,reg_l:40},
+  LAC:{name:'Clippers',city:'LA',abbr:'LAC',c1:'#C8102E',c2:'#1D428A',conf:'Ouest',seed_w:3,reg_w:50,reg_l:32},
+  HOU:{name:'Rockets',city:'Houston',abbr:'HOU',c1:'#CE1141',c2:'#C4CED4',conf:'Ouest',seed_w:8,reg_w:48,reg_l:34},
+};
+
+// Badge équipe avec couleurs officielles
+function TeamBadge({code,size=42,showName=false,showSeed=false}){
+  const t=TEAMS[code];if(!t)return null;
+  return(
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+      <div style={{width:size,height:size,borderRadius:size*.22,
+        background:`linear-gradient(135deg,${t.c1},${t.c1}cc)`,
+        border:`2px solid ${t.c2}44`,
+        display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+        boxShadow:`0 2px 8px ${t.c1}40`,flexShrink:0}}>
+        <div style={{fontSize:size*.26,fontWeight:900,color:t.c2,
+          fontFamily:'Space Grotesk,sans-serif',lineHeight:1,letterSpacing:-.5}}>{t.abbr}</div>
+      </div>
+      {showName&&<div style={{fontSize:10,color:'var(--tx2)',fontWeight:600,textAlign:'center',whiteSpace:'nowrap'}}>
+        {t.city}
+      </div>}
+      {showSeed&&<div style={{fontSize:9,color:'var(--tx3)',fontWeight:600}}>
+        #{t.conf==='Est'?t.seed_e:t.seed_w} {t.conf}
+      </div>}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   JOUEURS — roster complet des 16 équipes
+   Stats saison régulière 2024-25 + playoffs
+════════════════════════════════════════ */
+const PLAYERS=[
+  // OKC Thunder
+  {id:'sga',name:'Shai Gilgeous-Alexander',short:'SGA',team:'OKC',ppg:32.7,ppg_po:30.0,rang:1},
+  {id:'jalen_w',name:'Jalen Williams',short:'J.Williams',team:'OKC',ppg:22.5,ppg_po:22.0,rang:2},
+  {id:'holmgren',name:'Chet Holmgren',short:'Holmgren',team:'OKC',ppg:14.9,ppg_po:12.5,rang:3},
+  {id:'dort',name:'Lu Dort',short:'Dort',team:'OKC',ppg:13.2,ppg_po:11.0,rang:4},
+  {id:'caruso',name:'Alex Caruso',short:'Caruso',team:'OKC',ppg:9.7,ppg_po:9.1,rang:5},
+  {id:'gilgeous',name:'Isaiah Joe',short:'I.Joe',team:'OKC',ppg:7.8,ppg_po:6.5,rang:6},
+  // Indiana Pacers
+  {id:'haliburton',name:'Tyrese Haliburton',short:'Haliburton',team:'IND',ppg:20.4,ppg_po:18.5,rang:1},
+  {id:'siakam',name:'Pascal Siakam',short:'Siakam',team:'IND',ppg:23.9,ppg_po:21.5,rang:2},
+  {id:'mathurin',name:'Bennedict Mathurin',short:'Mathurin',team:'IND',ppg:16.3,ppg_po:15.8,rang:3},
+  {id:'mcconnell',name:'T.J. McConnell',short:'McConnell',team:'IND',ppg:8.5,ppg_po:11.2,rang:4},
+  {id:'toppin',name:'Obi Toppin',short:'Toppin',team:'IND',ppg:10.1,ppg_po:9.0,rang:5},
+  {id:'nembhard',name:'Andrew Nembhard',short:'Nembhard',team:'IND',ppg:9.4,ppg_po:8.8,rang:6},
+  // Minnesota T-Wolves
+  {id:'edwards',name:'Anthony Edwards',short:'Edwards',team:'MIN',ppg:27.2,ppg_po:24.8,rang:1},
+  {id:'randle',name:'Julius Randle',short:'Randle',team:'MIN',ppg:22.8,ppg_po:19.2,rang:2},
+  {id:'jmc',name:'Jalen McDaniels',short:'McDaniels',team:'MIN',ppg:11.4,ppg_po:10.5,rang:3},
+  {id:'gobert',name:'Rudy Gobert',short:'Gobert',team:'MIN',ppg:13.5,ppg_po:11.8,rang:4},
+  {id:'reid',name:'Naz Reid',short:'N.Reid',team:'MIN',ppg:12.9,ppg_po:10.2,rang:5},
+  {id:'conley',name:'Mike Conley',short:'Conley',team:'MIN',ppg:8.5,ppg_po:7.4,rang:6},
+  // New York Knicks
+  {id:'brunson',name:'Jalen Brunson',short:'Brunson',team:'NYK',ppg:25.1,ppg_po:26.0,rang:1},
+  {id:'bridges_m',name:'Mikal Bridges',short:'Bridges',team:'NYK',ppg:16.9,ppg_po:16.2,rang:2},
+  {id:'hart',name:'Josh Hart',short:'Hart',team:'NYK',ppg:14.4,ppg_po:14.0,rang:3},
+  {id:'anunoby',name:'OG Anunoby',short:'Anunoby',team:'NYK',ppg:14.7,ppg_po:15.5,rang:4},
+  {id:'Towns_k',name:'Karl-Anthony Towns',short:'KAT',team:'NYK',ppg:21.8,ppg_po:18.5,rang:5},
+  {id:'mcbride',name:'Miles McBride',short:'McBride',team:'NYK',ppg:8.6,ppg_po:7.9,rang:6},
+  // Boston Celtics
+  {id:'tatum',name:'Jayson Tatum',short:'Tatum',team:'BOS',ppg:26.9,ppg_po:25.0,rang:1},
+  {id:'brown_j',name:'Jaylen Brown',short:'J.Brown',team:'BOS',ppg:23.1,ppg_po:22.5,rang:2},
+  {id:'white',name:'Derrick White',short:'D.White',team:'BOS',ppg:15.2,ppg_po:13.8,rang:3},
+  {id:'holiday',name:'Jrue Holiday',short:'Holiday',team:'BOS',ppg:12.5,ppg_po:11.0,rang:4},
+  {id:'porzingis',name:'Kristaps Porzingis',short:'Porzingis',team:'BOS',ppg:13.8,ppg_po:12.2,rang:5},
+  {id:'hauser',name:'Sam Hauser',short:'Hauser',team:'BOS',ppg:9.6,ppg_po:8.1,rang:6},
+  // Cleveland Cavaliers
+  {id:'mitchell',name:'Donovan Mitchell',short:'Mitchell',team:'CLE',ppg:24.9,ppg_po:23.0,rang:1},
+  {id:'garland',name:'Darius Garland',short:'Garland',team:'CLE',ppg:19.5,ppg_po:17.2,rang:2},
+  {id:'mobley',name:'Evan Mobley',short:'Mobley',team:'CLE',ppg:18.0,ppg_po:15.5,rang:3},
+  {id:'allen_j',name:'Jarrett Allen',short:'J.Allen',team:'CLE',ppg:13.5,ppg_po:11.0,rang:4},
+  {id:'strus',name:'Max Strus',short:'Strus',team:'CLE',ppg:11.2,ppg_po:9.8,rang:5},
+  {id:'george_s',name:'Ty Jerome',short:'T.Jerome',team:'CLE',ppg:8.7,ppg_po:7.5,rang:6},
+  // Denver Nuggets
+  {id:'jokic',name:'Nikola Jokic',short:'Jokic',team:'DEN',ppg:29.6,ppg_po:25.4,rang:1},
+  {id:'murray',name:'Jamal Murray',short:'Murray',team:'DEN',ppg:18.7,ppg_po:19.8,rang:2},
+  {id:'porter',name:'Michael Porter Jr.',short:'MPJ',team:'DEN',ppg:14.7,ppg_po:13.2,rang:3},
+  {id:'gordon',name:'Aaron Gordon',short:'A.Gordon',team:'DEN',ppg:13.8,ppg_po:12.5,rang:4},
+  {id:'braun',name:'Christian Braun',short:'Braun',team:'DEN',ppg:10.4,ppg_po:9.3,rang:5},
+  {id:'rivers',name:'Austin Rivers',short:'A.Rivers',team:'DEN',ppg:6.5,ppg_po:5.8,rang:6},
+  // Golden State Warriors
+  {id:'curry',name:'Stephen Curry',short:'Curry',team:'GSW',ppg:22.5,ppg_po:27.1,rang:1},
+  {id:'thompson',name:'Klay Thompson',short:'Thompson',team:'GSW',ppg:17.9,ppg_po:18.4,rang:2},
+  {id:'green_d',name:'Draymond Green',short:'D.Green',team:'GSW',ppg:9.0,ppg_po:8.5,rang:3},
+  {id:'kuminga',name:'Jonathan Kuminga',short:'Kuminga',team:'GSW',ppg:16.1,ppg_po:14.8,rang:4},
+  {id:'podz',name:'Brandin Podziemski',short:'Podziem.',team:'GSW',ppg:9.2,ppg_po:8.0,rang:5},
+  {id:'wiggins',name:'Andrew Wiggins',short:'Wiggins',team:'GSW',ppg:13.6,ppg_po:12.1,rang:6},
+  // LA Lakers
+  {id:'lebron',name:'LeBron James',short:'LeBron',team:'LAL',ppg:23.5,ppg_po:22.8,rang:1},
+  {id:'davis',name:'Anthony Davis',short:'A.Davis',team:'LAL',ppg:24.7,ppg_po:23.1,rang:2},
+  {id:'reaves',name:'Austin Reaves',short:'Reaves',team:'LAL',ppg:15.9,ppg_po:14.5,rang:3},
+  {id:'hachimura',name:'Rui Hachimura',short:'Hachimura',team:'LAL',ppg:11.2,ppg_po:10.0,rang:4},
+  {id:'hayes',name:"Bronny James",short:"Bronny",team:'LAL',ppg:6.4,ppg_po:5.5,rang:5},
+  {id:'vincent',name:'Gabe Vincent',short:'Vincent',team:'LAL',ppg:7.0,ppg_po:6.2,rang:6},
+  // Memphis Grizzlies
+  {id:'ja',name:'Ja Morant',short:'Ja Morant',team:'MEM',ppg:22.1,ppg_po:24.6,rang:1},
+  {id:'adams',name:'Steven Adams',short:'S.Adams',team:'MEM',ppg:8.2,ppg_po:7.5,rang:2},
+  {id:'smart',name:'Marcus Smart',short:'Smart',team:'MEM',ppg:11.5,ppg_po:10.2,rang:3},
+  {id:'bane',name:'Desmond Bane',short:'Bane',team:'MEM',ppg:22.7,ppg_po:20.1,rang:4},
+  {id:'jackson_z',name:'Zach Edey',short:'Edey',team:'MEM',ppg:12.4,ppg_po:11.0,rang:5},
+  {id:'ziaire',name:'Ziaire Williams',short:'Z.Williams',team:'MEM',ppg:9.1,ppg_po:8.0,rang:6},
+  // Miami Heat
+  {id:'butler',name:'Jimmy Butler',short:'Butler',team:'MIA',ppg:20.8,ppg_po:22.5,rang:1},
+  {id:'herro',name:'Tyler Herro',short:'Herro',team:'MIA',ppg:24.4,ppg_po:21.8,rang:2},
+  {id:'adebayo',name:'Bam Adebayo',short:'Adebayo',team:'MIA',ppg:19.3,ppg_po:17.0,rang:3},
+  {id:'lowry',name:'Kyle Lowry',short:'Lowry',team:'MIA',ppg:8.0,ppg_po:7.2,rang:4},
+  {id:'highsmith',name:'Haywood Highsmith',short:'Highsmith',team:'MIA',ppg:8.5,ppg_po:7.8,rang:5},
+  {id:'love',name:'Kevin Love',short:'K.Love',team:'MIA',ppg:7.2,ppg_po:6.5,rang:6},
+  // Milwaukee Bucks
+  {id:'antetokounmpo',name:'G. Antetokounmpo',short:'Giannis',team:'MIL',ppg:32.7,ppg_po:33.8,rang:1},
+  {id:'lillard',name:'Damian Lillard',short:'Lillard',team:'MIL',ppg:24.3,ppg_po:22.1,rang:2},
+  {id:'portis',name:'Bobby Portis',short:'Portis',team:'MIL',ppg:14.8,ppg_po:12.5,rang:3},
+  {id:'middleton',name:'Khris Middleton',short:'Middleton',team:'MIL',ppg:11.5,ppg_po:10.2,rang:4},
+  {id:'brooks_d',name:'Dillon Brooks',short:'D.Brooks',team:'MIL',ppg:10.7,ppg_po:9.5,rang:5},
+  {id:'lopez',name:'Brook Lopez',short:'Lopez',team:'MIL',ppg:10.2,ppg_po:9.0,rang:6},
+  // Orlando Magic
+  {id:'banchero',name:'Paolo Banchero',short:'Banchero',team:'ORL',ppg:25.2,ppg_po:22.5,rang:1},
+  {id:'fultz',name:'Markelle Fultz',short:'Fultz',team:'ORL',ppg:12.8,ppg_po:11.5,rang:2},
+  {id:'wagner_f',name:'Franz Wagner',short:'F.Wagner',team:'ORL',ppg:21.4,ppg_po:19.8,rang:3},
+  {id:'suggs',name:'Jalen Suggs',short:'Suggs',team:'ORL',ppg:14.1,ppg_po:12.8,rang:4},
+  {id:'carter_w',name:'Wendell Carter Jr.',short:'Carter Jr.',team:'ORL',ppg:11.3,ppg_po:10.0,rang:5},
+  {id:'harris_g',name:'Gary Harris',short:'G.Harris',team:'ORL',ppg:7.5,ppg_po:6.8,rang:6},
+  // Detroit Pistons
+  {id:'ivey',name:'Jaden Ivey',short:'Ivey',team:'DET',ppg:18.5,ppg_po:20.2,rang:1},
+  {id:'cunningham',name:'Cade Cunningham',short:'Cunningham',team:'DET',ppg:22.7,ppg_po:21.5,rang:2},
+  {id:'duren',name:'Jalen Duren',short:'Duren',team:'DET',ppg:14.2,ppg_po:12.8,rang:3},
+  {id:'stewart',name:'Isaiah Stewart',short:'Stewart',team:'DET',ppg:10.8,ppg_po:9.5,rang:4},
+  {id:'tobias',name:'Tobias Harris',short:'T.Harris',team:'DET',ppg:13.6,ppg_po:12.0,rang:5},
+  {id:'boyden',name:'Simone Fontecchio',short:'Fontecchio',team:'DET',ppg:9.2,ppg_po:8.1,rang:6},
+  // LA Clippers
+  {id:'george',name:'Paul George',short:'P.George',team:'LAC',ppg:22.6,ppg_po:20.8,rang:1},
+  {id:'harden',name:'James Harden',short:'Harden',team:'LAC',ppg:21.1,ppg_po:19.5,rang:2},
+  {id:'zubac',name:'Ivica Zubac',short:'Zubac',team:'LAC',ppg:12.4,ppg_po:11.2,rang:3},
+  {id:'batum',name:'Nicolas Batum',short:'Batum',team:'LAC',ppg:7.8,ppg_po:7.0,rang:4},
+  {id:'mann',name:'Terance Mann',short:'T.Mann',team:'LAC',ppg:9.5,ppg_po:8.5,rang:5},
+  {id:'westbrook',name:'Russell Westbrook',short:'Westbrook',team:'LAC',ppg:11.1,ppg_po:9.8,rang:6},
+  // Houston Rockets
+  {id:'green_j',name:'Jalen Green',short:'J.Green',team:'HOU',ppg:22.6,ppg_po:24.1,rang:1},
+  {id:'sengun',name:'Alperen Sengun',short:'Sengun',team:'HOU',ppg:21.1,ppg_po:19.8,rang:2},
+  {id:'amen',name:'Amen Thompson',short:'A.Thompson',team:'HOU',ppg:12.2,ppg_po:11.5,rang:3},
+  {id:'brooks_g',name:'Garrison Brooks',short:'G.Brooks',team:'HOU',ppg:8.5,ppg_po:7.8,rang:4},
+  {id:'jabari',name:'Jabari Smith Jr.',short:'Jabari',team:'HOU',ppg:14.5,ppg_po:13.0,rang:5},
+  {id:'vvj',name:'Fred VanVleet',short:'VanVleet',team:'HOU',ppg:15.8,ppg_po:14.2,rang:6},
+];
+
+/* ════════════════════════════════════════
+   MATCHS — Simulation premier tour en cours
+   On se place au 25 avril 2025 (1er tour pas fini)
+════════════════════════════════════════ */
+const SERIES=[
+  // EST 1er tour
+  {id:'e1',conf:'Est',round:'1er Tour',team1:'CLE',team2:'MIA',
+   wins1:3,wins2:1,status:'ongoing',best_of:7,
+   games:[
+     {id:'e1g1',date:'2025-04-19',status:'finished',home:'CLE',away:'MIA',
+      home_odds:1.28,away_odds:3.80,hs:114,as:99,winner:'CLE',top_scorer:'mitchell',top_pts:28,
+      home_scr:['mitchell','garland','mobley','allen_j','strus','george_s'],
+      away_scr:['butler','herro','adebayo','lowry','highsmith','love']},
+     {id:'e1g2',date:'2025-04-22',status:'finished',home:'CLE',away:'MIA',
+      home_odds:1.28,away_odds:3.80,hs:108,as:95,winner:'CLE',top_scorer:'garland',top_pts:26,
+      home_scr:['mitchell','garland','mobley','allen_j','strus','george_s'],
+      away_scr:['butler','herro','adebayo','lowry','highsmith','love']},
+     {id:'e1g3',date:'2025-04-24',status:'finished',home:'MIA',away:'CLE',
+      home_odds:3.40,away_odds:1.32,hs:102,as:94,winner:'MIA',top_scorer:'butler',top_pts:24,
+      home_scr:['butler','herro','adebayo','lowry','highsmith','love'],
+      away_scr:['mitchell','garland','mobley','allen_j','strus','george_s']},
+     {id:'e1g4',date:'2025-04-26',time:'21:30',status:'live',home:'MIA',away:'CLE',
+      home_odds:3.40,away_odds:1.32,hs:78,as:81,period:'Q3 4:12',
+      home_scr:['butler','herro','adebayo','lowry','highsmith','love'],
+      away_scr:['mitchell','garland','mobley','allen_j','strus','george_s']},
+   ]},
+  {id:'e2',conf:'Est',round:'1er Tour',team1:'BOS',team2:'ORL',
+   wins1:3,wins2:0,status:'ongoing',best_of:7,
+   games:[
+     {id:'e2g1',date:'2025-04-20',status:'finished',home:'BOS',away:'ORL',
+      home_odds:1.22,away_odds:4.50,hs:119,as:96,winner:'BOS',top_scorer:'tatum',top_pts:32,
+      home_scr:['tatum','brown_j','white','holiday','porzingis','hauser'],
+      away_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g']},
+     {id:'e2g2',date:'2025-04-23',status:'finished',home:'BOS',away:'ORL',
+      home_odds:1.22,away_odds:4.50,hs:106,as:89,winner:'BOS',top_scorer:'brown_j',top_pts:25,
+      home_scr:['tatum','brown_j','white','holiday','porzingis','hauser'],
+      away_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g']},
+     {id:'e2g3',date:'2025-04-25',status:'finished',home:'ORL',away:'BOS',
+      home_odds:4.00,away_odds:1.25,hs:94,as:110,winner:'BOS',top_scorer:'tatum',top_pts:27,
+      home_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g'],
+      away_scr:['tatum','brown_j','white','holiday','porzingis','hauser']},
+     {id:'e2g4',date:'2025-04-27',time:'19:00',status:'upcoming',home:'ORL',away:'BOS',
+      home_odds:4.00,away_odds:1.25,
+      home_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g'],
+      away_scr:['tatum','brown_j','white','holiday','porzingis','hauser']},
+   ]},
+  {id:'e3',conf:'Est',round:'1er Tour',team1:'NYK',team2:'DET',
+   wins1:2,wins2:2,status:'ongoing',best_of:7,
+   games:[
+     {id:'e3g1',date:'2025-04-20',status:'finished',home:'NYK',away:'DET',
+      home_odds:1.45,away_odds:2.75,hs:118,as:112,winner:'NYK',top_scorer:'brunson',top_pts:29,
+      home_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride'],
+      away_scr:['cunningham','ivey','duren','stewart','tobias','boyden']},
+     {id:'e3g2',date:'2025-04-23',status:'finished',home:'NYK',away:'DET',
+      home_odds:1.45,away_odds:2.75,hs:97,as:105,winner:'DET',top_scorer:'brunson',top_pts:21,
+      home_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride'],
+      away_scr:['cunningham','ivey','duren','stewart','tobias','boyden']},
+     {id:'e3g3',date:'2025-04-25',status:'finished',home:'DET',away:'NYK',
+      home_odds:2.60,away_odds:1.52,hs:114,as:121,winner:'NYK',top_scorer:'brunson',top_pts:31,
+      home_scr:['cunningham','ivey','duren','stewart','tobias','boyden'],
+      away_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride']},
+     {id:'e3g4',date:'2025-04-27',time:'21:30',status:'upcoming',home:'DET',away:'NYK',
+      home_odds:2.60,away_odds:1.52,
+      home_scr:['cunningham','ivey','duren','stewart','tobias','boyden'],
+      away_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride']},
+     {id:'e3g5',date:'2025-04-29',time:'21:00',status:'upcoming',home:'NYK',away:'DET',
+      home_odds:1.55,away_odds:2.45,
+      home_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride'],
+      away_scr:['cunningham','ivey','duren','stewart','tobias','boyden']},
+   ]},
+  {id:'e4',conf:'Est',round:'1er Tour',team1:'IND',team2:'MIL',
+   wins1:2,wins2:1,status:'ongoing',best_of:7,
+   games:[
+     {id:'e4g1',date:'2025-04-19',status:'finished',home:'IND',away:'MIL',
+      home_odds:1.72,away_odds:2.15,hs:122,as:119,winner:'IND',top_scorer:'siakam',top_pts:28,
+      home_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard'],
+      away_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez']},
+     {id:'e4g2',date:'2025-04-22',status:'finished',home:'IND',away:'MIL',
+      home_odds:1.72,away_odds:2.15,hs:109,as:115,winner:'MIL',top_scorer:'antetokounmpo',top_pts:35,
+      home_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard'],
+      away_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez']},
+     {id:'e4g3',date:'2025-04-25',status:'finished',home:'MIL',away:'IND',
+      home_odds:2.05,away_odds:1.78,hs:108,as:114,winner:'IND',top_scorer:'haliburton',top_pts:24,
+      home_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez'],
+      away_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard']},
+     {id:'e4g4',date:'2025-04-27',time:'19:30',status:'upcoming',home:'MIL',away:'IND',
+      home_odds:2.05,away_odds:1.78,
+      home_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez'],
+      away_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard']},
+   ]},
+  // OUEST 1er tour
+  {id:'w1',conf:'Ouest',round:'1er Tour',team1:'OKC',team2:'MEM',
+   wins1:3,wins2:1,status:'ongoing',best_of:7,
+   games:[
+     {id:'w1g1',date:'2025-04-19',status:'finished',home:'OKC',away:'MEM',
+      home_odds:1.20,away_odds:5.00,hs:118,as:103,winner:'OKC',top_scorer:'sga',top_pts:35,
+      home_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous'],
+      away_scr:['ja','bane','smart','adams','jackson_z','ziaire']},
+     {id:'w1g2',date:'2025-04-22',status:'finished',home:'OKC',away:'MEM',
+      home_odds:1.20,away_odds:5.00,hs:124,as:110,winner:'OKC',top_scorer:'sga',top_pts:28,
+      home_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous'],
+      away_scr:['ja','bane','smart','adams','jackson_z','ziaire']},
+     {id:'w1g3',date:'2025-04-24',status:'finished',home:'MEM',away:'OKC',
+      home_odds:4.50,away_odds:1.22,hs:119,as:110,winner:'MEM',top_scorer:'ja',top_pts:31,
+      home_scr:['ja','bane','smart','adams','jackson_z','ziaire'],
+      away_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous']},
+     {id:'w1g4',date:'2025-04-26',time:'22:00',status:'live',home:'MEM',away:'OKC',
+      home_odds:4.50,away_odds:1.22,hs:88,as:91,period:'Q4 2:05',
+      home_scr:['ja','bane','smart','adams','jackson_z','ziaire'],
+      away_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous']},
+   ]},
+  {id:'w2',conf:'Ouest',round:'1er Tour',team1:'LAC',team2:'DEN',
+   wins1:1,wins2:2,status:'ongoing',best_of:7,
+   games:[
+     {id:'w2g1',date:'2025-04-20',status:'finished',home:'LAC',away:'DEN',
+      home_odds:2.10,away_odds:1.75,hs:111,as:105,winner:'LAC',top_scorer:'jokic',top_pts:27,
+      home_scr:['george','harden'],away_scr:['jokic','murray','porter']},
+     {id:'w2g2',date:'2025-04-23',status:'finished',home:'LAC',away:'DEN',
+      home_odds:2.10,away_odds:1.75,hs:94,as:112,winner:'DEN',top_scorer:'jokic',top_pts:34,
+      home_scr:['george','harden'],away_scr:['jokic','murray','porter']},
+     {id:'w2g3',date:'2025-04-26',status:'finished',home:'DEN',away:'LAC',
+      home_odds:1.72,away_odds:2.15,hs:108,as:103,winner:'DEN',top_scorer:'murray',top_pts:26,
+      home_scr:['jokic','murray','porter'],away_scr:['george','harden']},
+     {id:'w2g4',date:'2025-04-28',time:'22:00',status:'upcoming',home:'DEN',away:'LAC',
+      home_odds:1.65,away_odds:2.28,
+      home_scr:['jokic','murray','porter'],away_scr:['george','harden']},
+   ]},
+  {id:'w3',conf:'Ouest',round:'1er Tour',team1:'HOU',team2:'GSW',
+   wins1:2,wins2:2,status:'ongoing',best_of:7,
+   games:[
+     {id:'w3g1',date:'2025-04-20',status:'finished',home:'HOU',away:'GSW',
+      home_odds:1.75,away_odds:2.10,hs:129,as:118,winner:'HOU',top_scorer:'curry',top_pts:33,
+      home_scr:['green_j','sengun'],away_scr:['curry','thompson']},
+     {id:'w3g2',date:'2025-04-23',status:'finished',home:'HOU',away:'GSW',
+      home_odds:1.75,away_odds:2.10,hs:105,as:112,winner:'GSW',top_scorer:'curry',top_pts:30,
+      home_scr:['green_j','sengun'],away_scr:['curry','thompson']},
+     {id:'w3g3',date:'2025-04-25',status:'finished',home:'GSW',away:'HOU',
+      home_odds:2.00,away_odds:1.85,hs:108,as:113,winner:'HOU',top_scorer:'green_j',top_pts:27,
+      home_scr:['curry','thompson'],away_scr:['green_j','sengun']},
+     {id:'w3g4',date:'2025-04-27',time:'22:00',status:'upcoming',home:'GSW',away:'HOU',
+      home_odds:2.00,away_odds:1.85,
+      home_scr:['curry','thompson'],away_scr:['green_j','sengun']},
+     {id:'w3g5',date:'2025-04-29',time:'22:30',status:'upcoming',home:'HOU',away:'GSW',
+      home_odds:1.80,away_odds:2.05,
+      home_scr:['green_j','sengun'],away_scr:['curry','thompson']},
+   ]},
+  {id:'w4',conf:'Ouest',round:'1er Tour',team1:'MIN',team2:'LAL',
+   wins1:3,wins2:1,status:'ongoing',best_of:7,
+   games:[
+     {id:'w4g1',date:'2025-04-19',status:'finished',home:'MIN',away:'LAL',
+      home_odds:1.55,away_odds:2.45,hs:117,as:108,winner:'MIN',top_scorer:'edwards',top_pts:26,
+      home_scr:['edwards','randle','jmc','gobert'],away_scr:['lebron','davis','reaves']},
+     {id:'w4g2',date:'2025-04-22',status:'finished',home:'MIN',away:'LAL',
+      home_odds:1.55,away_odds:2.45,hs:100,as:87,winner:'MIN',top_scorer:'edwards',top_pts:22,
+      home_scr:['edwards','randle','jmc','gobert'],away_scr:['lebron','davis','reaves']},
+     {id:'w4g3',date:'2025-04-25',status:'finished',home:'LAL',away:'MIN',
+      home_odds:2.40,away_odds:1.58,hs:116,as:109,winner:'LAL',top_scorer:'lebron',top_pts:28,
+      home_scr:['lebron','davis','reaves'],away_scr:['edwards','randle','jmc','gobert']},
+     {id:'w4g4',date:'2025-04-27',time:'20:00',status:'upcoming',home:'LAL',away:'MIN',
+      home_odds:2.40,away_odds:1.58,
+      home_scr:['lebron','davis','reaves'],away_scr:['edwards','randle','jmc','gobert']},
+   ]},
+];
+
+// Flatten tous les matchs
+const ALL_GAMES=SERIES.flatMap(s=>s.games.map((g,i)=>({...g,game_num:i+1,series_id:s.id,series:s})));
+
+// Grouper par date
+const GAMES_BY_DATE={};
+ALL_GAMES.forEach(g=>{
+  if(!GAMES_BY_DATE[g.date])GAMES_BY_DATE[g.date]=[];
+  GAMES_BY_DATE[g.date].push(g);
+});
+const ALL_DATES=Object.keys(GAMES_BY_DATE).sort();
+
+
+
+// Résultat d'un pick
+function computeResult(game,pick){
+  if(!pick||game.status!=='finished')return{pts:0,win_ok:false,scorer_ok:false};
+  const win_ok=pick.winner===game.winner;
+  const scorer_ok=pick.scorer&&pick.scorer===game.top_scorer;
+  let pts=0;
+  if(win_ok){const o=pick.winner===game.home?game.home_odds:game.away_odds;pts+=calcWinPts(o);}
+  if(scorer_ok){const p=PLAYERS.find(x=>x.id===pick.scorer);pts+=calcScorerPts(p?.rang||6);}
+  return{pts,win_ok,scorer_ok};
+}
+
+// Demo picks
+const DEMO_PICKS={
+  e1g1:{winner:'CLE',scorer:'mitchell',joker:false},
+  e1g2:{winner:'CLE',scorer:'garland',joker:false},
+  e1g3:{winner:'MIA',scorer:'butler',joker:false},
+  e2g1:{winner:'BOS',scorer:'tatum',joker:false},
+  e2g2:{winner:'BOS',scorer:'brown_j',joker:false},
+  e2g3:{winner:'BOS',scorer:'tatum',joker:false},
+  e3g1:{winner:'NYK',scorer:'brunson',joker:false},
+  e3g2:{winner:'NYK',scorer:'brunson',joker:false},
+  e3g3:{winner:'NYK',scorer:'brunson',joker:true},
+  e3g4:{winner:'NYK',scorer:'bridges_m',joker:false},
+  e4g1:{winner:'IND',scorer:'siakam',joker:false},
+  e4g2:{winner:'IND',scorer:'haliburton',joker:false},
+  e4g3:{winner:'IND',scorer:'haliburton',joker:false},
+  w1g1:{winner:'OKC',scorer:'sga',joker:false},
+  w1g2:{winner:'OKC',scorer:'sga',joker:false},
+  w1g3:{winner:'OKC',scorer:'sga',joker:false},
+  w2g1:{winner:'DEN',scorer:'jokic',joker:false},
+  w2g2:{winner:'DEN',scorer:'jokic',joker:false},
+  w2g3:{winner:'DEN',scorer:'jokic',joker:false},
+  w3g1:{winner:'HOU',scorer:'curry',joker:false},
+  w3g2:{winner:'GSW',scorer:'curry',joker:false},
+  w3g3:{winner:'HOU',scorer:'green_j',joker:false},
+  w3g4:{winner:'GSW',scorer:'curry',joker:false},
+  w4g1:{winner:'MIN',scorer:'edwards',joker:false},
+  w4g2:{winner:'MIN',scorer:'edwards',joker:false},
+  w4g3:{winner:'LAL',scorer:'lebron',joker:false},
+  e1g4:{winner:'CLE',scorer:'mitchell'},
+  w1g4:{winner:'OKC',scorer:'sga'},
+};
+
+const MEMBERS=[
+  {id:'me',name:'Moi',avatar:'TL',color:'#FF5C1A',champion:'OKC'},
+  {id:'alexis',name:'Alexis S.',avatar:'AS',color:'#22C55E',champion:'BOS'},
+  {id:'marc',name:'Marc R.',avatar:'MR',color:'#F59E0B',champion:'OKC'},
+  {id:'julie',name:'Julie D.',avatar:'JD',color:'#EC4899',champion:'CLE'},
+  {id:'remi',name:'Rémi P.',avatar:'RP',color:'#A855F7',champion:'MIN'},
+];
+
+const OTHERS_PICKS={
+  alexis:{e1g1:{winner:'CLE',scorer:'mitchell'},e1g2:{winner:'CLE',scorer:'mitchell'},e1g3:{winner:'CLE',scorer:'mitchell'},
+          e2g1:{winner:'BOS',scorer:'tatum'},e2g2:{winner:'BOS',scorer:'tatum'},e2g3:{winner:'BOS',scorer:'tatum'},
+          e3g1:{winner:'NYK',scorer:'brunson'},e3g2:{winner:'NYK',scorer:'brunson'},
+          e3g3:{winner:'NYK',scorer:'brunson'},e3g4:{winner:'NYK',scorer:'brunson'},
+          e4g1:{winner:'IND',scorer:'siakam'},e4g2:{winner:'IND',scorer:'siakam'},e4g3:{winner:'IND',scorer:'haliburton'},
+          w1g1:{winner:'OKC',scorer:'sga',joker:true},w1g2:{winner:'OKC',scorer:'sga'},w1g3:{winner:'OKC',scorer:'sga'},
+          w2g1:{winner:'DEN',scorer:'jokic'},w2g2:{winner:'DEN',scorer:'jokic'},w2g3:{winner:'DEN',scorer:'murray'},
+          w3g1:{winner:'HOU',scorer:'green_j'},w3g2:{winner:'GSW',scorer:'curry'},
+          w3g3:{winner:'HOU',scorer:'green_j'},w3g4:{winner:'HOU',scorer:'green_j'},
+          w4g1:{winner:'MIN',scorer:'edwards'},w4g2:{winner:'MIN',scorer:'edwards'},w4g3:{winner:'MIN',scorer:'lebron'},
+          e1g4:{winner:'MIA',scorer:'butler'},w1g4:{winner:'OKC',scorer:'sga'}},
+  marc:{e1g1:{winner:'CLE',scorer:'mitchell'},e1g2:{winner:'CLE',scorer:'garland'},e1g3:{winner:'MIA',scorer:'butler'},
+        e2g1:{winner:'BOS',scorer:'tatum'},e2g2:{winner:'BOS',scorer:'tatum'},e2g3:{winner:'BOS',scorer:'tatum'},
+        e3g1:{winner:'NYK',scorer:'brunson'},e3g2:{winner:'DET',scorer:'ivey'},
+        e3g3:{winner:'NYK',scorer:'brunson'},e3g4:{winner:'DET',scorer:'ivey'},
+        e4g1:{winner:'MIL',scorer:'antetokounmpo'},e4g2:{winner:'MIL',scorer:'antetokounmpo'},e4g3:{winner:'IND',scorer:'siakam'},
+        w1g1:{winner:'OKC',scorer:'sga'},w1g2:{winner:'OKC',scorer:'sga'},w1g3:{winner:'OKC',scorer:'sga'},
+        w2g1:{winner:'DEN',scorer:'jokic'},w2g2:{winner:'LAC',scorer:'george'},w2g3:{winner:'DEN',scorer:'jokic'},
+        w3g1:{winner:'HOU',scorer:'green_j'},w3g2:{winner:'HOU',scorer:'sengun'},
+        w3g3:{winner:'HOU',scorer:'green_j'},w3g4:{winner:'GSW',scorer:'curry'},
+        w4g1:{winner:'MIN',scorer:'edwards'},w4g2:{winner:'MIN',scorer:'randle'},w4g3:{winner:'LAL',scorer:'davis'},
+        e1g4:{winner:'CLE',scorer:'garland'},w1g4:{winner:'MEM',scorer:'ja'}},
+  julie:{e1g1:{winner:'MIA',scorer:'butler'},e1g2:{winner:'MIA',scorer:'herro'},e1g3:{winner:'MIA',scorer:'butler'},
+         e2g1:{winner:'BOS',scorer:'tatum'},e2g2:{winner:'ORL',scorer:'banchero'},e2g3:{winner:'ORL',scorer:'banchero'},
+         e3g1:{winner:'NYK',scorer:'brunson'},e3g2:{winner:'NYK',scorer:'brunson'},
+         e3g3:{winner:'DET',scorer:'ivey'},e3g4:{winner:'DET',scorer:'ivey'},
+         e4g1:{winner:'IND',scorer:'haliburton'},e4g2:{winner:'IND',scorer:'haliburton',joker:true},e4g3:{winner:'IND',scorer:'siakam'},
+         w1g1:{winner:'OKC',scorer:'sga'},w1g2:{winner:'OKC',scorer:'jalen_w'},w1g3:{winner:'MEM',scorer:'ja'},
+         w2g1:{winner:'DEN',scorer:'jokic'},w2g2:{winner:'DEN',scorer:'jokic'},w2g3:{winner:'DEN',scorer:'jokic'},
+         w3g1:{winner:'GSW',scorer:'curry'},w3g2:{winner:'GSW',scorer:'curry'},
+         w3g3:{winner:'GSW',scorer:'curry'},w3g4:{winner:'GSW',scorer:'curry'},
+         w4g1:{winner:'LAL',scorer:'davis'},w4g2:{winner:'MIN',scorer:'edwards'},w4g3:{winner:'LAL',scorer:'lebron'},
+         e1g4:{winner:'MIA',scorer:'herro'},w1g4:{winner:'OKC',scorer:'jalen_w'}},
+  remi:{e1g1:{winner:'CLE',scorer:'mitchell'},e1g2:{winner:'CLE',scorer:'mitchell'},e1g3:{winner:'MIA',scorer:'herro'},
+        e2g1:{winner:'BOS',scorer:'tatum'},e2g2:{winner:'BOS',scorer:'brown_j'},e2g3:{winner:'BOS',scorer:'white'},
+        e3g1:{winner:'NYK',scorer:'brunson'},e3g2:{winner:'DET',scorer:'ivey'},
+        e3g3:{winner:'NYK',scorer:'brunson'},e3g4:{winner:'NYK',scorer:'bridges_m'},
+        e4g1:{winner:'IND',scorer:'siakam'},e4g2:{winner:'MIL',scorer:'antetokounmpo'},e4g3:{winner:'IND',scorer:'haliburton'},
+        w1g1:{winner:'OKC',scorer:'sga'},w1g2:{winner:'OKC',scorer:'sga'},w1g3:{winner:'MEM',scorer:'ja'},
+        w2g1:{winner:'LAC',scorer:'george'},w2g2:{winner:'DEN',scorer:'jokic'},w2g3:{winner:'DEN',scorer:'murray'},
+        w3g1:{winner:'HOU',scorer:'sengun'},w3g2:{winner:'GSW',scorer:'curry'},
+        w3g3:{winner:'HOU',scorer:'green_j'},w3g4:{winner:'HOU',scorer:'green_j'},
+        w4g1:{winner:'MIN',scorer:'edwards'},w4g2:{winner:'MIN',scorer:'gobert'},w4g3:{winner:'LAL',scorer:'lebron'},
+        e1g4:{winner:'CLE',scorer:'mitchell'},w1g4:{winner:'OKC',scorer:'holmgren'}},
+};
+
+/* ════════════════════════════════════════
+   ATOMS
+════════════════════════════════════════ */
+const Avi=({ini,color,size=36,ring})=>(
+  <div style={{width:size,height:size,borderRadius:'50%',flexShrink:0,
+    background:`${color}22`,border:`1.5px solid ${color}44`,
+    display:'flex',alignItems:'center',justifyContent:'center',
+    fontSize:size*.32,fontWeight:700,color,
+    outline:ring?`2px solid ${color}`:undefined,outlineOffset:ring?2:undefined}}>
+    {ini}
+  </div>
+);
+const Pill=({children,color='var(--o)',bg,style={}})=>(
+  <span style={{display:'inline-flex',alignItems:'center',gap:3,padding:'2px 7px',borderRadius:999,
+    background:bg||`${color}18`,color,fontSize:11,fontWeight:700,...style}}>{children}</span>
+);
+const Card=({children,style={},onClick})=>(
+  <div onClick={onClick} style={{background:'var(--c)',border:'1px solid var(--bd)',
+    borderRadius:'var(--rad)',padding:'13px 15px',cursor:onClick?'pointer':undefined,
+    transition:'border-color .15s,background .15s',...style}}
+    onMouseEnter={e=>{if(onClick){e.currentTarget.style.borderColor='var(--bd2)';e.currentTarget.style.background='var(--c2)'}}}
+    onMouseLeave={e=>{if(onClick){e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.background='var(--c)'}}}>
+    {children}
+  </div>
+);
+const Divider=({m='11px 0'})=><div style={{height:1,background:'var(--bd)',margin:m}}/>;
+const SecLabel=({children,style={}})=>(
+  <div style={{fontSize:10,fontWeight:700,color:'var(--tx3)',letterSpacing:1.2,
+    textTransform:'uppercase',marginBottom:9,...style}}>{children}</div>
+);
+
+const LiveDot=()=>(
+  <span style={{width:7,height:7,borderRadius:'50%',background:'var(--r)',
+    boxShadow:'0 0 0 2px rgba(239,68,68,.2)',display:'inline-block',
+    animation:'pulse 1.3s ease infinite'}}/>
+);
+const OkBadge=({ok})=>(
+  <span style={{fontSize:11,padding:'1px 6px',borderRadius:5,fontWeight:700,
+    background:ok?'var(--gb)':'var(--rb)',color:ok?'var(--g)':'var(--r)'}}>{ok?'✓':'✗'}</span>
+);
+
+function Toast({msg,onDone}){
+  useEffect(()=>{const t=setTimeout(onDone,2000);return()=>clearTimeout(t)},[]);
+  return(
+    <div style={{position:'fixed',top:16,left:'50%',transform:'translateX(-50%)',
+      background:'var(--c)',border:'1px solid var(--bd2)',borderRadius:999,
+      padding:'9px 18px',zIndex:9999,display:'flex',alignItems:'center',gap:8,
+      boxShadow:'0 8px 24px rgba(0,0,0,.6)',animation:'slideUp .22s ease both',whiteSpace:'nowrap'}}>
+      ✅ <span style={{fontSize:13,fontWeight:600}}>{msg}</span>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   NAV
+════════════════════════════════════════ */
+const NAV=[{id:'home',icon:'⚡',lbl:'Accueil'},{id:'matches',icon:'🗓️',lbl:'Matchs'},
+           {id:'leagues',icon:'🏆',lbl:'Ligues'},{id:'profile',icon:'👤',lbl:'Profil'}];
+function Nav({page,setPage}){
+  return(
+    <nav style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',
+      width:'100%',maxWidth:430,zIndex:100,
+      background:'rgba(11,11,11,.97)',backdropFilter:'blur(20px)',
+      borderTop:'1px solid var(--bd)',display:'flex',
+      paddingBottom:'env(safe-area-inset-bottom)'}}>
+      {NAV.map(it=>(
+        <button key={it.id} onClick={()=>setPage(it.id)} style={{
+          flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,
+          padding:'9px 0 7px',fontSize:9,fontWeight:700,letterSpacing:.5,textTransform:'uppercase',
+          color:page===it.id?'var(--o)':'var(--tx3)',transition:'color .12s'}}>
+          <span style={{fontSize:20,lineHeight:1}}>{it.icon}</span>{it.lbl}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/* ════════════════════════════════════════
+   LOGIN
+════════════════════════════════════════ */
+function LoginPage({onLogin}){
+  const [name,setName]=useState('');
+  return(
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',
+      alignItems:'center',justifyContent:'center',padding:28}}>
+      <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',
+        justifyContent:'center',gap:5}}>
+        <div style={{fontSize:70}}>🏀</div>
+        <div className="grot" style={{fontSize:34,fontWeight:900,color:'var(--o)',letterSpacing:-1}}>Mon Petit</div>
+        <div className="grot" style={{fontSize:34,fontWeight:900,letterSpacing:-1,marginTop:-6}}>Playoff</div>
+        <div style={{fontSize:13,color:'var(--tx2)',marginTop:6,textAlign:'center'}}>
+          Pronos entre amis · 1er tour Playoffs NBA 2025
+        </div>
+      </div>
+      <div style={{width:'100%',paddingBottom:36,display:'flex',flexDirection:'column',gap:0}}>
+        <button onClick={()=>onLogin({name:'Thomas L.'})} style={{
+          width:'100%',padding:15,borderRadius:'var(--rad)',
+          background:'white',color:'#111',fontWeight:700,fontSize:14,
+          display:'flex',alignItems:'center',justifyContent:'center',gap:9,
+          marginBottom:10,boxShadow:'0 2px 12px rgba(0,0,0,.45)'}}>
+          <svg width="17" height="17" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.615 24 12.255 24z"/><path fill="#FBBC05" d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 000 10.76l3.98-3.09z"/><path fill="#EA4335" d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.64 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+          Continuer avec Google
+        </button>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+          <div style={{flex:1,height:1,background:'var(--bd)'}}/><span style={{fontSize:11,color:'var(--tx3)'}}>ou</span>
+          <div style={{flex:1,height:1,background:'var(--bd)'}}/>
+        </div>
+        <input value={name} onChange={e=>setName(e.target.value)}
+          placeholder="Ton prénom"
+          style={{width:'100%',padding:'13px 14px',borderRadius:'var(--rad)',
+            background:'var(--c)',border:`1px solid ${name?'var(--o)':'var(--bd)'}`,
+            color:'var(--tx)',fontSize:15,marginBottom:10,transition:'border-color .15s'}}/>
+        <button onClick={()=>{if(name.trim())onLogin({name:name.trim()})}}
+          style={{width:'100%',padding:14,borderRadius:'var(--rad)',
+            background:name.trim()?'var(--o)':'var(--bd)',
+            color:name.trim()?'white':'var(--tx3)',fontWeight:700,fontSize:15,
+            fontFamily:'Space Grotesk,sans-serif',transition:'background .15s'}}>
+          Commencer →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   HOME
+════════════════════════════════════════ */
+function HomePage({picks,setPage,user,championPick,setChampionPick,toast,setDetailGame,setPickGame}){
+  const liveGames=ALL_GAMES.filter(g=>g.status==='live');
+  const upcomingGames=ALL_GAMES.filter(g=>g.status==='upcoming').sort((a,b)=>{
+    const da=a.date+(a.time||'99:99');
+    const db=b.date+(b.time||'99:99');
+    return da<db?-1:da>db?1:0;
+  });
+  const pendingCount=upcomingGames.filter(g=>!picks[g.id]).length;
+  const playoffsStarted=ALL_GAMES.some(g=>g.status==='finished'||g.status==='live');
+
+  return(
+    <div style={{padding:'18px 15px 88px'}} className="fi">
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+        <div>
+          <div style={{fontSize:11,color:'var(--tx3)',fontWeight:600,letterSpacing:.5}}>SALUT 👋</div>
+          <div className="grot" style={{fontSize:21,fontWeight:700}}>{user?.name}</div>
+          <div style={{fontSize:12,color:'var(--tx2)',marginTop:1}}>Playoffs NBA 2025 · 1er tour</div>
+        </div>
+        <Avi ini={(user?.name||'?').slice(0,2).toUpperCase()} color="var(--o)" size={40} ring/>
+      </div>
+
+      {/* Champion pick — verrouillé dès le 1er match */}
+      {!championPick&&!playoffsStarted&&(
+        <button onClick={()=>setPage('profile')} style={{
+          width:'100%',background:'linear-gradient(135deg,#1c0b00,#1a1a1a)',
+          border:'1px solid rgba(255,92,26,.35)',borderRadius:'var(--rad)',
+          padding:'12px 15px',marginBottom:13,cursor:'pointer',
+          display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:22}}>🏅</span>
+            <div style={{textAlign:'left'}}>
+              <div style={{fontSize:13,fontWeight:700,color:'var(--o)'}}>Choisis ton champion NBA</div>
+              <div style={{fontSize:11,color:'var(--tx2)'}}>+50 pts · Verrouillé au 1er match</div>
+            </div>
+          </div>
+          <span style={{color:'var(--o)',fontSize:18}}>→</span>
+        </button>
+      )}
+      {championPick&&(
+        <div style={{background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.2)',
+          borderRadius:'var(--rad)',padding:'11px 14px',marginBottom:13,
+          display:'flex',alignItems:'center',gap:10}}>
+          <TeamBadge code={championPick} size={34}/>
+          <div>
+            <div style={{fontSize:11,color:'var(--gold)',fontWeight:700,marginBottom:1}}>🏅 MON CHAMPION</div>
+            <div style={{fontSize:13,fontWeight:700}}>{TEAMS[championPick]?.city} {TEAMS[championPick]?.name}</div>
+            {playoffsStarted&&<div style={{fontSize:10,color:'var(--tx3)',marginTop:2}}>🔒 Verrouillé</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Alerte pronos manquants */}
+      {pendingCount>0&&(
+        <button onClick={()=>setPage('matches')} style={{
+          width:'100%',background:'var(--ob2)',border:'1px solid rgba(255,92,26,.3)',
+          borderRadius:'var(--rad)',padding:'11px 14px',marginBottom:13,
+          display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}}>
+          <div style={{display:'flex',alignItems:'center',gap:9}}>
+            <span style={{fontSize:20}}>⚠️</span>
+            <div style={{textAlign:'left'}}>
+              <div style={{fontSize:13,fontWeight:700,color:'var(--o)'}}>{pendingCount} prono{pendingCount>1?'s':''} en attente</div>
+              <div style={{fontSize:11,color:'var(--tx2)'}}>
+                {upcomingGames.length} match{upcomingGames.length>1?'s':''} à pronostiquer
+              </div>
+            </div>
+          </div>
+          <span style={{color:'var(--o)',fontSize:18}}>→</span>
+        </button>
+      )}
+
+      {/* Matchs en direct — cliquables pour voir les pronos de la ligue */}
+      {liveGames.length>0&&(
+        <div style={{marginBottom:14}}>
+          <SecLabel><span style={{display:'inline-flex',alignItems:'center',gap:5}}><LiveDot/> En direct · Tap pour voir les pronos</span></SecLabel>
+          {liveGames.map(g=>(
+            <LiveCard key={g.id} game={g} pick={picks[g.id]}
+              onClick={()=>{setDetailGame(g.id);setPage('matches');}}/>
+          ))}
+        </div>
+      )}
+
+      {/* Tous les matchs à venir */}
+      {upcomingGames.length>0?(
+        <div>
+          <SecLabel>Matchs à pronostiquer ({upcomingGames.length})</SecLabel>
+          {upcomingGames.map(g=>(
+            <UpcomingMiniCard key={g.id} game={g} pick={picks[g.id]} onClick={()=>setPickGame(g.id)}/>
+          ))}
+        </div>
+      ):(
+        liveGames.length===0&&(
+          <div style={{textAlign:'center',padding:'32px 0',color:'var(--tx3)'}}>
+            <div style={{fontSize:32,marginBottom:8}}>🏀</div>
+            <div style={{fontSize:14,fontWeight:600}}>Aucun match à venir</div>
+            <div style={{fontSize:12,marginTop:4}}>Reviens pendant les playoffs</div>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function LiveCard({game,pick,onClick}){
+  const hT=TEAMS[game.home],aT=TEAMS[game.away];
+  const hWin=game.hs>game.as;
+  return(
+    <Card style={{marginBottom:9,borderColor:'rgba(239,68,68,.25)',background:'#130808',cursor:'pointer'}} onClick={onClick}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:9}}>
+        <div>
+          <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)'}}>{game.series?.round} · Match {game.game_num}</div>
+          <div style={{fontSize:9,color:'var(--tx3)',marginTop:1}}>
+            {TEAMS[game.series?.team1]?.name} {game.series?.wins1}–{game.series?.wins2} {TEAMS[game.series?.team2]?.name}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:5,alignItems:'center'}}>
+          <Pill color='var(--r)'><LiveDot/> {game.period}</Pill>
+          <span style={{fontSize:11,color:'var(--tx3)'}}>Voir pronos →</span>
+        </div>
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <div style={{flex:1,display:'flex',alignItems:'center',gap:8}}>
+          <TeamBadge code={game.home} size={36}/>
+          <div>
+            <div style={{fontWeight:700,fontSize:12}}>{hT?.name}</div>
+            <div style={{fontSize:10,color:'var(--tx2)'}}>Cote {game.home_odds}</div>
+          </div>
+        </div>
+        <div className="grot" style={{fontWeight:700,fontSize:26,display:'flex',gap:4,textAlign:'center'}}>
+          <span style={{color:hWin?'var(--tx)':'var(--tx3)'}}>{game.hs}</span>
+          <span style={{color:'var(--tx3)'}}>—</span>
+          <span style={{color:!hWin?'var(--tx)':'var(--tx3)'}}>{game.as}</span>
+        </div>
+        <div style={{flex:1,display:'flex',alignItems:'center',gap:8,justifyContent:'flex-end'}}>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontWeight:700,fontSize:12}}>{aT?.name}</div>
+            <div style={{fontSize:10,color:'var(--tx2)'}}>Cote {game.away_odds}</div>
+          </div>
+          <TeamBadge code={game.away} size={36}/>
+        </div>
+      </div>
+      {pick&&(
+        <>
+          <Divider m='9px 0'/>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontSize:12,color:'var(--tx2)'}}>
+              Mon prono : <b style={{color:'var(--tx)'}}>{TEAMS[pick.winner]?.name}</b>
+              {pick.scorer&&<> · <b style={{color:'var(--tx)'}}>{PLAYERS.find(p=>p.id===pick.scorer)?.short}</b></>}
+            </span>
+            <span style={{fontSize:12,color:'var(--o)',fontWeight:700}}>
+              +{calcWinPts(pick.winner===game.home?game.home_odds:game.away_odds)+(pick.scorer?calcScorerPts(PLAYERS.find(p=>p.id===pick.scorer)?.rang||6):0)} pts pot.
+            </span>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function UpcomingMiniCard({game,pick,onClick}){
+  const hT=TEAMS[game.home],aT=TEAMS[game.away];
+  return(
+    <Card style={{marginBottom:8}} onClick={onClick}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+        <div>
+          <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)'}}>
+            {game.series?.round} · Match {game.game_num}
+          </div>
+          <div style={{fontSize:9,color:'var(--tx3)',marginTop:1}}>
+            {new Date(game.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}
+            {game.time&&<span style={{marginLeft:5,fontWeight:600,color:'var(--o)'}}>🕐 {game.time}</span>}
+          </div>
+        </div>
+        {!pick?<Pill color='var(--o)'>Pronostiquer →</Pill>:<Pill color='var(--g)'>✓</Pill>}
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div style={{display:'flex',alignItems:'center',gap:7}}>
+          <TeamBadge code={game.home} size={30}/>
+          <div>
+            <div style={{fontSize:12,fontWeight:600}}>{hT?.name}</div>
+            <div style={{fontSize:10,color:'var(--o)',fontWeight:700}}>{calcWinPts(game.home_odds)} pts</div>
+          </div>
+        </div>
+        <span style={{color:'var(--tx3)',fontWeight:700,fontSize:11}}>VS</span>
+        <div style={{display:'flex',alignItems:'center',gap:7,flexDirection:'row-reverse'}}>
+          <TeamBadge code={game.away} size={30}/>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:12,fontWeight:600}}>{aT?.name}</div>
+            <div style={{fontSize:10,color:'var(--o)',fontWeight:700}}>{calcWinPts(game.away_odds)} pts</div>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ════════════════════════════════════════
+   MATCHES PAGE
+════════════════════════════════════════ */
+function MatchesPage({picks,setPicks,toast,defaultDetail,clearDefaultDetail,defaultPickGame,clearDefaultPickGame}){
+  const [selDate,setSelDate]=useState(()=>{
+    const liveDate=ALL_GAMES.find(g=>g.status==='live')?.date;
+    const upcomingDate=ALL_GAMES.find(g=>g.status==='upcoming')?.date;
+    return liveDate||upcomingDate||ALL_DATES[ALL_DATES.length-1];
+  });
+  const [pickGame,setPickGame]=useState(defaultPickGame||null);
+  const [detailGame,setDetailGame]=useState(defaultDetail||null);
+  const dateRef=useRef(null);
+
+  useEffect(()=>{
+    if(defaultDetail){clearDefaultDetail();}
+    if(defaultPickGame){clearDefaultPickGame();}
+  },[]);
+
+  useEffect(()=>{
+    const el=dateRef.current?.querySelector(`[data-date="${selDate}"]`);
+    if(el)el.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
+  },[selDate]);
+
+  const game=ALL_GAMES.find(g=>g.id===pickGame);
+  if(game)return(
+    <PickForm game={game} pick={picks[game.id]}
+      onSave={(p)=>{
+        setPicks(pr=>({...pr,[game.id]:p}));
+        toast('Pronostic enregistré ✓');
+        setPickGame(null);
+      }}
+      onBack={()=>setPickGame(null)}/>
+  );
+
+  if(detailGame){
+    const dg=ALL_GAMES.find(g=>g.id===detailGame);
+    if(dg) return <MatchDetail game={dg} pick={picks[dg.id]} onBack={()=>setDetailGame(null)}/>;
+  }
+
+  const dayGames=GAMES_BY_DATE[selDate]||[];
+
+  return(
+    <div style={{padding:'18px 0 88px'}} className="fi">
+      <div style={{padding:'0 15px',marginBottom:12}}>
+        <div className="grot" style={{fontSize:21,fontWeight:700,marginBottom:1}}>🗓️ Matchs</div>
+        <div style={{fontSize:12,color:'var(--tx2)'}}>1er tour Playoffs NBA 2025</div>
+      </div>
+      <div ref={dateRef} style={{display:'flex',gap:6,overflowX:'auto',padding:'0 15px 11px',
+        WebkitOverflowScrolling:'touch',msOverflowStyle:'none',scrollbarWidth:'none'}}>
+        {ALL_DATES.map(d=>{
+          const dGames=GAMES_BY_DATE[d]||[];
+          const hasLive=dGames.some(g=>g.status==='live');
+          const hasPending=dGames.some(g=>g.status==='upcoming'&&!picks[g.id]);
+          const sel=selDate===d;
+          const dt=new Date(d+'T12:00:00');
+          return(
+            <button key={d} data-date={d} onClick={()=>setSelDate(d)} style={{
+              flexShrink:0,padding:'6px 11px',borderRadius:'var(--rads)',
+              border:`1.5px solid ${sel?'var(--o)':'var(--bd)'}`,
+              background:sel?'var(--ob)':'var(--c)',
+              color:sel?'var(--o)':'var(--tx2)',fontSize:12,fontWeight:sel?700:500,
+              transition:'all .15s',position:'relative'}}>
+              {dt.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}
+              {hasLive&&<span style={{position:'absolute',top:2,right:2,width:5,height:5,borderRadius:'50%',background:'var(--r)'}}/>}
+              {!hasLive&&hasPending&&<span style={{position:'absolute',top:2,right:2,width:5,height:5,borderRadius:'50%',background:'var(--o)'}}/>}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{padding:'0 15px'}}>
+        {dayGames.map(g=>(
+          <MatchDayCard key={g.id} game={g} pick={picks[g.id]}
+            onPick={()=>setPickGame(g.id)}
+            onDetail={()=>setDetailGame(g.id)}/>
+        ))}
+        {dayGames.length===0&&<div style={{textAlign:'center',padding:40,color:'var(--tx3)'}}>Aucun match ce jour</div>}
+      </div>
+    </div>
+  );
+}
+
+
+function MatchDayCard({game,pick,onPick,onDetail}){
+  const hT=TEAMS[game.home],aT=TEAMS[game.away];
+  const res=pick?computeResult(game,pick):null;
+  const isDone=game.status==='finished';
+  const isLive=game.status==='live';
+  const clickable=isDone||isLive;
+  return(
+    <Card style={{marginBottom:9,
+      borderColor:isLive?'rgba(239,68,68,.25)':'var(--bd)',
+      background:isLive?'#130808':'var(--c)'}}
+      onClick={clickable?onDetail:undefined}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:9}}>
+        <div>
+          <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)'}}>
+            {game.series?.round} · Match {game.game_num}
+          </div>
+          <div style={{fontSize:9,color:'var(--tx3)',marginTop:1}}>
+            {TEAMS[game.series?.team1]?.name} {game.series?.wins1}–{game.series?.wins2} {TEAMS[game.series?.team2]?.name}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:5,alignItems:'center'}}>
+          {!isDone&&!isLive&&game.time&&<span style={{fontSize:10,color:'var(--tx3)',fontWeight:600}}>{game.time}</span>}
+          {isLive&&<Pill color='var(--r)'><LiveDot/> {game.period}</Pill>}
+          {isLive&&<span style={{fontSize:10,color:'var(--tx3)'}}>Pronos →</span>}
+          {isDone&&res&&<span style={{fontSize:13,fontWeight:700,
+            color:res.pts>0?'var(--g)':pick?'var(--r)':'var(--tx3)'}}>
+            {pick?(res.pts>0?`+${res.pts} pts`:'0 pt'):'—'}
+          </span>}
+          {isDone&&<span style={{fontSize:10,color:'var(--tx3)'}}>Ligue →</span>}
+          {!isDone&&!isLive&&(pick?<Pill color='var(--g)'>✓ Modif.</Pill>:<Pill color='var(--o)'>Pronostiquer →</Pill>)}
+        </div>
+      </div>
+      {(isDone||isLive)?(
+        <div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:6}}>
+            <div style={{display:'flex',alignItems:'center',gap:7,flex:1}}>
+              <TeamBadge code={game.home} size={34}/>
+              <div>
+                <div style={{fontSize:12,fontWeight:isDone&&game.winner===game.home?700:500,
+                  color:isDone&&game.winner===game.home?'var(--tx)':'var(--tx2)'}}>{hT?.name}</div>
+                {isDone&&<div style={{fontSize:9,color:'var(--tx3)'}}>Cote {game.home_odds}</div>}
+              </div>
+            </div>
+            <div className="grot" style={{fontWeight:700,fontSize:22,display:'flex',gap:4}}>
+              <span style={{color:isDone?(game.winner===game.home?'var(--g)':'var(--tx3)'):(game.hs>game.as?'var(--tx)':'var(--tx3)')}}>{game.hs}</span>
+              <span style={{color:'var(--tx3)'}}>—</span>
+              <span style={{color:isDone?(game.winner===game.away?'var(--g)':'var(--tx3)'):(game.as>game.hs?'var(--tx)':'var(--tx3)')}}>{game.as}</span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:7,flex:1,justifyContent:'flex-end'}}>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:12,fontWeight:isDone&&game.winner===game.away?700:500,
+                  color:isDone&&game.winner===game.away?'var(--tx)':'var(--tx2)'}}>{aT?.name}</div>
+                {isDone&&<div style={{fontSize:9,color:'var(--tx3)'}}>Cote {game.away_odds}</div>}
+              </div>
+              <TeamBadge code={game.away} size={34}/>
+            </div>
+          </div>
+          {isDone&&game.top_scorer&&(
+            <div style={{marginTop:7,padding:'5px 9px',background:'var(--dk2)',borderRadius:'var(--radxs)',
+              display:'flex',alignItems:'center',gap:6}}>
+              <span style={{fontSize:10,color:'var(--tx3)'}}>🏀 Top scoreur</span>
+              <span style={{fontSize:11,fontWeight:700,color:'var(--gold)'}}>
+                {PLAYERS.find(p=>p.id===game.top_scorer)?.name} · {game.top_pts} pts
+              </span>
+            </div>
+          )}
+          {pick&&isDone&&(
+            <div style={{marginTop:7,display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+              <OkBadge ok={res.win_ok}/>
+              <span style={{fontSize:11,color:'var(--tx2)'}}>{TEAMS[pick.winner]?.name}</span>
+              {pick.scorer&&<><OkBadge ok={res.scorer_ok}/>
+                <span style={{fontSize:11,color:'var(--tx2)'}}>{PLAYERS.find(p=>p.id===pick.scorer)?.short}</span>
+              </>}
+            </div>
+          )}
+        </div>
+      ):(
+        <div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+            <div style={{display:'flex',alignItems:'center',gap:7,flex:1}}>
+              <TeamBadge code={game.home} size={34}/>
+              <div>
+                <div style={{fontSize:12,fontWeight:500}}>{hT?.name}</div>
+                <div style={{fontSize:10,color:'var(--tx2)'}}>Cote {game.home_odds} → <b style={{color:'var(--o)'}}>{calcWinPts(game.home_odds)} pts</b></div>
+              </div>
+            </div>
+            <span style={{color:'var(--tx3)',fontWeight:700,fontSize:11}}>VS</span>
+            <div style={{display:'flex',alignItems:'center',gap:7,flex:1,justifyContent:'flex-end',flexDirection:'row-reverse'}}>
+              <TeamBadge code={game.away} size={34}/>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:12,fontWeight:500}}>{aT?.name}</div>
+                <div style={{fontSize:10,color:'var(--tx2)'}}><b style={{color:'var(--o)'}}>{calcWinPts(game.away_odds)} pts</b> ← Cote {game.away_odds}</div>
+              </div>
+            </div>
+          </div>
+          {pick&&(
+            <div style={{marginTop:8,display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+              <span style={{fontSize:11,color:'var(--tx3)'}}>Prono :</span>
+              <span style={{fontSize:11,fontWeight:700,padding:'1px 6px',background:'var(--ob)',color:'var(--o)',borderRadius:5}}>{TEAMS[pick.winner]?.name}</span>
+              {pick.scorer&&<span style={{fontSize:11,fontWeight:700,padding:'1px 6px',background:'var(--blb)',color:'var(--bl)',borderRadius:5}}>{PLAYERS.find(p=>p.id===pick.scorer)?.short}</span>}
+            </div>
+          )}
+          <button onClick={e=>{e.stopPropagation();onPick();}} style={{
+            marginTop:8,width:'100%',padding:'8px 0',borderRadius:'var(--rads)',
+            background:pick?'var(--bd)':'var(--ob)',border:`1px solid ${pick?'var(--bd)':'rgba(255,92,26,.3)'}`,
+            color:pick?'var(--tx2)':'var(--o)',fontSize:12,fontWeight:700}}>
+            {pick?'Modifier le pronostic':'Pronostiquer ce match'}
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ════════════════════════════════════════
+   MATCH DETAIL — pronos de la ligue (terminé ou en cours)
+════════════════════════════════════════ */
+function MatchDetail({game,pick,onBack}){
+  const isDone=game.status==='finished';
+  const isLive=game.status==='live';
+
+  const memberPicks=MEMBERS.map(m=>{
+    const pk=m.id==='me'?pick:(OTHERS_PICKS[m.id]||{})[game.id];
+    const res=pk?computeResult(game,pk):{pts:0,win_ok:false,scorer_ok:false};
+    return{...m,pick:pk,res};
+  });
+
+  return(
+    <div style={{padding:'16px 15px 88px'}} className="fi">
+      <button onClick={onBack} style={{color:'var(--tx2)',marginBottom:14,fontSize:14,display:'flex',alignItems:'center',gap:5}}>
+        ← Retour
+      </button>
+      <Card style={{marginBottom:14,textAlign:'center'}}>
+        <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+          {game.series?.round} · {game.game}
+          {isLive&&<span style={{display:'inline-flex',alignItems:'center',gap:4}}><LiveDot/><span style={{color:'var(--r)',fontSize:10,fontWeight:700}}>{game.period}</span></span>}
+        </div>
+        <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',gap:6}}>
+          {[game.home,game.away].map((code,i)=>(
+            <React.Fragment key={code}>
+              {i===1&&(
+                <div style={{textAlign:'center',minWidth:80}}>
+                  {(isDone||isLive)&&<div className="grot" style={{fontWeight:700,fontSize:28,display:'flex',gap:5,justifyContent:'center'}}>
+                    <span style={{color:isDone&&game.winner===game.home?'var(--g)':isLive&&game.hs>game.as?'var(--tx)':'var(--tx3)'}}>{game.hs}</span>
+                    <span style={{color:'var(--tx3)'}}>—</span>
+                    <span style={{color:isDone&&game.winner===game.away?'var(--g)':isLive&&game.as>game.hs?'var(--tx)':'var(--tx3)'}}>{game.as}</span>
+                  </div>}
+                  {!isDone&&!isLive&&<div style={{color:'var(--tx3)',fontWeight:700,fontSize:16}}>VS</div>}
+                  {isDone&&game.top_scorer&&<div style={{marginTop:5,fontSize:10,color:'var(--gold)',fontWeight:700}}>
+                    🏀 {PLAYERS.find(p=>p.id===game.top_scorer)?.short} · {game.top_pts} pts
+                  </div>}
+                </div>
+              )}
+              <div style={{flex:1,textAlign:'center'}}>
+                <div style={{display:'flex',justifyContent:'center',marginBottom:5}}><TeamBadge code={code} size={44}/></div>
+                <div style={{fontWeight:700,fontSize:13,color:isDone&&game.winner===code?'var(--g)':'var(--tx)'}}>{TEAMS[code]?.city}</div>
+                {isDone&&game.winner===code&&<div style={{fontSize:10,color:'var(--g)',fontWeight:700}}>✓ VAINQUEUR</div>}
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      </Card>
+
+      <SecLabel>Pronos de la ligue</SecLabel>
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {memberPicks.map(m=>{
+          const isMe=m.id==='me';
+          return(
+            <Card key={m.id} style={{borderColor:isMe?'rgba(255,92,26,.25)':'var(--bd)',background:isMe?'rgba(255,92,26,.04)':'var(--c)'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:m.pick?9:0}}>
+                <Avi ini={m.avatar} color={m.color} size={32}/>
+                <div style={{flex:1}}>
+                  <div style={{display:'flex',alignItems:'center',gap:5}}>
+                    <span style={{fontWeight:isMe?700:600,fontSize:13}}>{m.name}</span>
+                    {isMe&&<Pill color='var(--o)' style={{fontSize:9,padding:'1px 5px'}}>Moi</Pill>}
+                  </div>
+                  {!m.pick&&<div style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>Pas de pronostic</div>}
+                </div>
+                {m.pick&&isDone&&<span className="grot" style={{fontSize:18,fontWeight:700,color:m.res.pts>0?'var(--g)':'var(--r)'}}>{m.res.pts>0?`+${m.res.pts}`:'0'}</span>}
+              </div>
+              {m.pick&&(
+                <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:'var(--rads)',flex:1,
+                    background:isDone?(m.res.win_ok?'var(--gb)':'var(--rb)'):'var(--dk2)',
+                    border:`1px solid ${isDone?(m.res.win_ok?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)'):'var(--bd)'}`}}>
+                    <TeamBadge code={m.pick.winner} size={24}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,fontWeight:700}}>{TEAMS[m.pick.winner]?.name}</div>
+                      {isDone&&<div style={{fontSize:10,color:m.res.win_ok?'var(--g)':'var(--r)',fontWeight:600}}>
+                        {m.res.win_ok?`+${calcWinPts(m.pick.winner===game.home?game.home_odds:game.away_odds)} pts`:'✗'}
+                      </div>}
+                    </div>
+                    {isDone&&<OkBadge ok={m.res.win_ok}/>}
+                  </div>
+                  {m.pick.scorer&&(()=>{
+                    const sp=PLAYERS.find(p=>p.id===m.pick.scorer);
+                    return(
+                      <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:'var(--rads)',flex:1,
+                        background:isDone?(m.res.scorer_ok?'var(--gb)':'var(--rb)'):'var(--dk2)',
+                        border:`1px solid ${isDone?(m.res.scorer_ok?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)'):'var(--bd)'}`}}>
+                        <div style={{width:24,height:24,borderRadius:'50%',flexShrink:0,
+                          background:`${TEAMS[sp?.team]?.c1}30`,border:`1px solid ${TEAMS[sp?.team]?.c1}40`,
+                          display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:TEAMS[sp?.team]?.c1}}>
+                          {sp?.team}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sp?.short}</div>
+                          {isDone&&<div style={{fontSize:10,color:m.res.scorer_ok?'var(--g)':'var(--r)',fontWeight:600}}>
+                            {m.res.scorer_ok?`+${calcScorerPts(sp?.rang||6)} pts`:'✗'}
+                          </div>}
+                        </div>
+                        {isDone&&<OkBadge ok={m.res.scorer_ok}/>}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   PICK FORM — sans joker
+════════════════════════════════════════ */
+function PickForm({game,pick,onSave,onBack}){
+  const [winner,setWinner]=useState(pick?.winner||null);
+  const [scorer,setScorer]=useState(pick?.scorer||null);
+  const hT=TEAMS[game.home],aT=TEAMS[game.away];
+  // Tous les joueurs des deux équipes, par rang
+  const homePlayers=PLAYERS.filter(p=>p.team===game.home).sort((a,b)=>a.rang-b.rang);
+  const awayPlayers=PLAYERS.filter(p=>p.team===game.away).sort((a,b)=>a.rang-b.rang);
+  const wOdds=winner===game.home?game.home_odds:winner===game.away?game.away_odds:null;
+  const wPts=wOdds?calcWinPts(wOdds):0;
+  const sPl=PLAYERS.find(p=>p.id===scorer);
+  const sPts=sPl?calcScorerPts(sPl.rang):0;
+  const total=wPts+sPts;
+  const canSave=winner&&scorer;
+
+  const StepN=({n,done})=>(
+    <span style={{width:20,height:20,borderRadius:'50%',flexShrink:0,
+      background:done?'var(--o)':'var(--bd)',display:'inline-flex',alignItems:'center',
+      justifyContent:'center',fontSize:10,fontWeight:700,color:done?'white':'var(--tx2)',transition:'background .15s'}}>
+      {done?'✓':n}
+    </span>
+  );
+
+  function PlayerBtn({p}){
+    const sel=scorer===p.id;
+    const pts=calcScorerPts(p.rang);
+    const tCol=TEAMS[p.team]?.c1||'#888';
+    const rankColor=p.rang===1?'var(--o)':p.rang<=3?'var(--bl)':p.rang<=6?'var(--j)':'var(--tx3)';
+    return(
+      <button onClick={()=>setScorer(p.id)} style={{
+        display:'flex',alignItems:'center',gap:9,padding:'9px 12px',
+        borderRadius:'var(--rads)',marginBottom:5,width:'100%',
+        border:`2px solid ${sel?'var(--o)':'var(--bd)'}`,
+        background:sel?'var(--ob)':'var(--dk2)',transition:'all .14s',textAlign:'left'}}>
+        <div style={{width:32,height:32,borderRadius:'50%',flexShrink:0,
+          background:`${tCol}18`,border:`1.5px solid ${tCol}30`,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          fontSize:8,fontWeight:800,color:tCol}}>{p.team}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:600,fontSize:12}}>{p.name}</div>
+          <div style={{fontSize:10,color:'var(--tx2)',marginTop:1}}>
+            Saison {p.ppg} pts/j · PO {p.ppg_po} pts/j
+          </div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:2,flexShrink:0}}>
+          <span style={{fontSize:10,fontWeight:700,color:rankColor}}>#{p.rang} éq.</span>
+          <span style={{fontSize:13,fontWeight:700,color:sel?'var(--o)':'var(--tx2)'}}>+{pts}</span>
+        </div>
+      </button>
+    );
+  }
+
+  return(
+    <div style={{padding:'16px 15px 100px'}} className="fi">
+      <button onClick={onBack} style={{display:'flex',alignItems:'center',gap:5,
+        color:'var(--tx2)',marginBottom:13,fontSize:14}}>
+        ← Retour
+      </button>
+
+      {/* Têtes d'affiche */}
+      <Card style={{marginBottom:13,textAlign:'center'}}>
+        <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)',marginBottom:10}}>
+          {game.series?.round} · {game.game} — Série {game.series?.wins1}–{game.series?.wins2}
+        </div>
+        <div style={{display:'flex',justifyContent:'space-around',alignItems:'center',gap:8}}>
+          {[{code:game.home,odds:game.home_odds},{code:game.away,odds:game.away_odds}].map((opt,i)=>{
+            const t=TEAMS[opt.code];
+            return(
+              <React.Fragment key={opt.code}>
+                {i===1&&<div style={{color:'var(--tx3)',fontWeight:700,fontSize:12}}>VS</div>}
+                <div style={{flex:1,textAlign:'center'}}>
+                  <div style={{display:'flex',justifyContent:'center',marginBottom:5}}>
+                    <TeamBadge code={opt.code} size={46}/>
+                  </div>
+                  <div style={{fontWeight:700,fontSize:12}}>{t?.city}</div>
+                  <div style={{fontSize:10,color:'var(--tx2)'}}>Cote {opt.odds}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--o)',marginTop:1}}>+{calcWinPts(opt.odds)} pts</div>
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Stats équipes */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:13}}>
+        {[{code:game.home},{code:game.away}].map(({code})=>{
+          const t=TEAMS[code];
+          const s=game.series;
+          const isHome=code===game.home;
+          const myWins=isHome?s?.wins1:s?.wins2;
+          const theirWins=isHome?s?.wins2:s?.wins1;
+          return(
+            <div key={code} style={{padding:'10px 11px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:'1px solid var(--bd)'}}>
+              <div style={{fontSize:10,fontWeight:700,color:TEAMS[code]?.c1,marginBottom:7,
+                display:'flex',alignItems:'center',gap:5}}>
+                <TeamBadge code={code} size={16}/> {t?.abbr}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                <StatRow l="Saison" v={`#${t?.conf==='Est'?t?.seed_e:t?.seed_w} ${t?.conf}`}/>
+                <StatRow l="Bilan" v={`${t?.reg_w}V – ${t?.reg_l}D`}/>
+                <StatRow l="Série" v={`${myWins}–${theirWins}`}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Étape 1 */}
+      <div style={{marginBottom:13}}>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:9,display:'flex',alignItems:'center',gap:6}}>
+          <StepN n={1} done={!!winner}/>Qui va gagner ?
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          {[{code:game.home,odds:game.home_odds},{code:game.away,odds:game.away_odds}].map(opt=>{
+            const t=TEAMS[opt.code];
+            const sel=winner===opt.code;
+            const pts=calcWinPts(opt.odds);
+            return(
+              <button key={opt.code} onClick={()=>setWinner(opt.code)} style={{
+                padding:13,borderRadius:'var(--rad)',textAlign:'center',
+                border:`2px solid ${sel?'var(--o)':'var(--bd)'}`,
+                background:sel?'var(--ob)':'var(--dk2)',transition:'all .14s'}}>
+                <div style={{display:'flex',justifyContent:'center',marginBottom:6}}>
+                  <TeamBadge code={opt.code} size={38}/>
+                </div>
+                <div style={{fontWeight:700,fontSize:12,marginBottom:5}}>
+                  {t?.city} {t?.name}
+                </div>
+                <div style={{fontSize:10,color:'var(--tx2)',marginBottom:7}}>Cote {opt.odds}</div>
+                <div style={{padding:'4px 0',borderRadius:8,
+                  background:sel?'var(--o)':'var(--bd)',
+                  color:sel?'white':'var(--tx2)',fontSize:14,fontWeight:700}}>
+                  +{pts} pts
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Étape 2 */}
+      <div style={{marginBottom:13,opacity:winner?1:.3,transition:'opacity .2s',pointerEvents:winner?'auto':'none'}}>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:4,display:'flex',alignItems:'center',gap:6}}>
+          <StepN n={2} done={!!scorer}/>Meilleur scoreur ?
+        </div>
+        <div style={{fontSize:10,color:'var(--tx2)',marginBottom:9,display:'flex',gap:8,flexWrap:'wrap'}}>
+          {[['#1',10,'var(--o)'],[' #2-3',20,'var(--bl)'],[' #4-6',30,'var(--j)'],['Autres',40,'var(--tx3)']].map(([l,p,c])=>(
+            <span key={l} style={{padding:'1px 7px',borderRadius:5,background:`${c}15`,color:c,fontWeight:700,fontSize:10}}>
+              {l}→{p}pts
+            </span>
+          ))}
+        </div>
+        {homePlayers.length>0&&<>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--tx3)',marginBottom:6,
+            display:'flex',alignItems:'center',gap:5}}>
+            <TeamBadge code={game.home} size={14}/> {hT?.name}
+          </div>
+          {homePlayers.map(p=><PlayerBtn key={p.id} p={p}/>)}
+        </>}
+        {awayPlayers.length>0&&<>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--tx3)',marginBottom:6,marginTop:9,
+            display:'flex',alignItems:'center',gap:5}}>
+            <TeamBadge code={game.away} size={14}/> {aT?.name}
+          </div>
+          {awayPlayers.map(p=><PlayerBtn key={p.id} p={p}/>)}
+        </>}
+      </div>
+
+      {/* Étape 3 Joker — supprimé */}
+
+      {/* Récap + CTA */}
+      {canSave&&(
+        <Card style={{marginBottom:11,background:'rgba(255,92,26,.05)',borderColor:'rgba(255,92,26,.18)'}}>
+          <SecLabel style={{marginBottom:8}}>Récapitulatif</SecLabel>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+            <span style={{fontSize:12,color:'var(--tx2)'}}>🏆 {TEAMS[winner]?.name}</span>
+            <span style={{fontSize:12,fontWeight:700,color:'var(--o)'}}>+{wPts} pts</span>
+          </div>
+          {scorer&&<div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+            <span style={{fontSize:12,color:'var(--tx2)'}}>🏀 {sPl?.short} (#{sPl?.rang} éq.)</span>
+            <span style={{fontSize:12,fontWeight:700,color:'var(--o)'}}>+{sPts} pts</span>
+          </div>}
+          <Divider m='8px 0'/>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontWeight:700,fontSize:13}}>Potentiel total</span>
+            <span className="grot" style={{fontSize:22,fontWeight:900,color:'var(--o)'}}>+{total} pts</span>
+          </div>
+        </Card>
+      )}
+      <button disabled={!canSave} onClick={()=>onSave({winner,scorer})} style={{
+        width:'100%',padding:15,borderRadius:'var(--rad)',fontWeight:700,fontSize:15,
+        background:canSave?'var(--o)':'var(--bd)',color:canSave?'white':'var(--tx3)',
+        cursor:canSave?'pointer':'not-allowed',fontFamily:'Space Grotesk,sans-serif',transition:'background .15s'}}>
+        {canSave?`Confirmer · Potentiel +${total} pts`:'Choisis vainqueur + scoreur'}
+      </button>
+    </div>
+  );
+}
+
+function StatRow({l,v}){
+  return(
+    <div style={{display:'flex',justifyContent:'space-between'}}>
+      <span style={{fontSize:10,color:'var(--tx3)'}}>{l}</span>
+      <span style={{fontSize:10,fontWeight:600}}>{v}</span>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   LEAGUES PAGE
+════════════════════════════════════════ */
+function LeaguesPage({picks,uid}){
+  const [leagues,setLeagues]=useLeagues(uid);
+  const [activeId,setActiveId]=useState('l1');
+  const [view,setView]=useState('main');// main|create|join
+  const [tab,setTab]=useState('rank');
+  const [selectedMember,setSelectedMember]=useState(null);
+  const [newName,setNewName]=useState('');
+  const [joinCode,setJoinCode]=useState('');
+
+  const myPts=useMemo(()=>ALL_GAMES.reduce((s,g)=>s+computeResult(g,picks[g.id]).pts,0),[picks]);
+
+  const getMembers=(league)=>league.members.map(m=>{
+    if(m.id==='me')return{...m,total:myPts};
+    const op=OTHERS_PICKS[m.id]||{};
+    const total=ALL_GAMES.reduce((s,g)=>s+computeResult(g,op[g.id]).pts,0);
+    return{...m,total};
+  }).sort((a,b)=>b.total-a.total);
+
+  if(selectedMember)return(
+    <MemberProfile member={selectedMember} onBack={()=>setSelectedMember(null)}/>
+  );
+
+  if(view==='create')return(
+    <div style={{padding:'18px 15px 88px'}} className="fi">
+      <button onClick={()=>setView('main')} style={{color:'var(--tx2)',marginBottom:14,fontSize:14}}>← Retour</button>
+      <div className="grot" style={{fontSize:21,fontWeight:700,marginBottom:3}}>Créer une ligue</div>
+      <div style={{fontSize:13,color:'var(--tx2)',marginBottom:18}}>Un code est généré automatiquement</div>
+      <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Nom de la ligue"
+        style={{width:'100%',padding:'13px 14px',borderRadius:'var(--rad)',
+          background:'var(--c)',border:`1px solid ${newName?'var(--o)':'var(--bd)'}`,
+          color:'var(--tx)',fontSize:15,marginBottom:10}}/>
+      {newName.length>=2&&(
+        <Card style={{marginBottom:12,background:'var(--ob)',borderColor:'rgba(255,92,26,.2)'}}>
+          <div style={{fontSize:11,color:'var(--tx2)',marginBottom:4}}>Code d'invitation</div>
+          <div className="grot" style={{fontSize:26,fontWeight:900,color:'var(--o)',letterSpacing:4}}>
+            {(newName.replace(/\s+/g,'').toUpperCase().slice(0,4)+'25').slice(0,6)}
+          </div>
+          <div style={{fontSize:11,color:'var(--tx2)',marginTop:4}}>Partage ce code à tes amis</div>
+        </Card>
+      )}
+      <button onClick={()=>{
+        if(newName.trim().length>=2){
+          const code=(newName.replace(/\s+/g,'').toUpperCase().slice(0,4)+'25').slice(0,6);
+          const newLeague={id:'l'+Date.now(),name:newName.trim(),code,members:[MEMBERS[0]]};
+          setLeagues(l=>[...l,newLeague]);
+          setActiveId(newLeague.id);
+          setView('main');setNewName('');
+        }
+      }} style={{width:'100%',padding:14,borderRadius:'var(--rad)',
+        background:newName.trim().length>=2?'var(--o)':'var(--bd)',
+        color:newName.trim().length>=2?'white':'var(--tx3)',fontWeight:700,fontSize:15,
+        fontFamily:'Space Grotesk,sans-serif'}}>
+        Créer la ligue →
+      </button>
+    </div>
+  );
+
+  if(view==='join')return(
+    <div style={{padding:'18px 15px 88px'}} className="fi">
+      <button onClick={()=>setView('main')} style={{color:'var(--tx2)',marginBottom:14,fontSize:14}}>← Retour</button>
+      <div className="grot" style={{fontSize:21,fontWeight:700,marginBottom:3}}>Rejoindre une ligue</div>
+      <div style={{fontSize:13,color:'var(--tx2)',marginBottom:18}}>Entre le code que ton ami t'a envoyé</div>
+      <input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())}
+        placeholder="Code (ex: NBA25PO)"
+        style={{width:'100%',padding:'13px 14px',borderRadius:'var(--rad)',
+          background:'var(--c)',border:`1px solid ${joinCode.length>=4?'var(--o)':'var(--bd)'}`,
+          color:'var(--tx)',fontSize:22,fontWeight:700,letterSpacing:4,textAlign:'center',marginBottom:10}}/>
+      {joinCode.length>=4&&(
+        <Card style={{marginBottom:12,background:'var(--gb)',borderColor:'rgba(34,197,94,.2)'}}>
+          <div style={{fontSize:12,color:'var(--g)',fontWeight:700}}>✓ Code valide — Ligue des Potes 2025</div>
+        </Card>
+      )}
+      <button onClick={()=>{
+        if(joinCode.trim().length>=4){
+          setView('main');setJoinCode('');
+        }
+      }} style={{width:'100%',padding:14,borderRadius:'var(--rad)',
+        background:joinCode.trim().length>=4?'var(--o)':'var(--bd)',
+        color:joinCode.trim().length>=4?'white':'var(--tx3)',fontWeight:700,fontSize:15,
+        fontFamily:'Space Grotesk,sans-serif'}}>
+        Rejoindre →
+      </button>
+    </div>
+  );
+
+  const league=leagues.find(l=>l.id===activeId)||leagues[0];
+  const members=getMembers(league);
+
+  return(
+    <div style={{padding:'18px 15px 88px'}} className="fi">
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+        <div className="grot" style={{fontSize:21,fontWeight:700}}>🏆 Ligues</div>
+        <div style={{display:'flex',gap:7}}>
+          <button onClick={()=>setView('join')} style={{fontSize:12,fontWeight:700,padding:'7px 11px',
+            borderRadius:'var(--rads)',background:'var(--blb)',color:'var(--bl)',border:'1px solid rgba(59,130,246,.2)'}}>
+            + Rejoindre
+          </button>
+          <button onClick={()=>setView('create')} style={{fontSize:12,fontWeight:700,padding:'7px 11px',
+            borderRadius:'var(--rads)',background:'var(--ob)',color:'var(--o)',border:'1px solid rgba(255,92,26,.2)'}}>
+            + Créer
+          </button>
+        </div>
+      </div>
+
+      {/* Sélecteur ligues */}
+      {leagues.length>1&&(
+        <div style={{display:'flex',gap:6,overflowX:'auto',marginBottom:13,paddingBottom:4}}>
+          {leagues.map(l=>(
+            <button key={l.id} onClick={()=>setActiveId(l.id)} style={{
+              flexShrink:0,padding:'6px 12px',borderRadius:'var(--rads)',fontSize:12,fontWeight:600,
+              border:`1.5px solid ${activeId===l.id?'var(--o)':'var(--bd)'}`,
+              background:activeId===l.id?'var(--ob)':'var(--c)',
+              color:activeId===l.id?'var(--o)':'var(--tx2)'}}>
+              {l.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Ligue active */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:15}}>{league?.name}</div>
+          <div style={{fontSize:12,color:'var(--tx2)',display:'flex',alignItems:'center',gap:6,marginTop:1}}>
+            Code : <b style={{color:'var(--o)',letterSpacing:2}}>{league?.code}</b>
+            <button onClick={()=>{try{navigator.clipboard.writeText(league?.code)}catch(e){}}}
+              style={{fontSize:10,padding:'1px 6px',borderRadius:5,background:'var(--bd)',color:'var(--tx2)',fontWeight:600}}>Copier</button>
+          </div>
+        </div>
+        <div style={{fontSize:12,color:'var(--tx2)'}}>{members.length} joueurs</div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:4,background:'var(--dk2)',borderRadius:'var(--rads)',padding:4,marginBottom:13}}>
+        {[['rank','Classement'],['champion','Champions']].map(([v,l])=>(
+          <button key={v} onClick={()=>setTab(v)} style={{
+            flex:1,padding:'8px 4px',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
+            background:tab===v?'var(--c)':'transparent',
+            color:tab===v?'var(--tx)':'var(--tx2)',transition:'all .15s'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab==='rank'&&<RankTab members={members} onSelectMember={setSelectedMember}/>}
+      {tab==='champion'&&<ChampLeagueTab members={members}/>}
+    </div>
+  );
+}
+
+function MemberProfile({member,onBack}){
+  const isMe=member.id==='me';
+  const memberPicks=isMe?null:(OTHERS_PICKS[member.id]||{});
+  const results=useMemo(()=>ALL_GAMES
+    .filter(g=>g.status==='finished')
+    .map(g=>{
+      const pick=isMe?null:memberPicks[g.id];
+      const res=computeResult(g,pick||{});
+      return{game:g,pick,res};
+    })
+  ,[member]);
+
+  const total=results.reduce((s,x)=>s+x.res.pts,0);
+  const withPick=results.filter(x=>x.pick);
+  const winOk=withPick.filter(x=>x.res.win_ok).length;
+  const scorerOk=withPick.filter(x=>x.pick?.scorer&&x.res.scorer_ok).length;
+  const withScorer=withPick.filter(x=>x.pick?.scorer).length;
+
+  // Ranking evolution: cumulative pts over time
+  const evolution=[];let cum=0;
+  results.forEach(({res})=>{cum+=res.pts;evolution.push(cum);});
+
+  const [tab,setTab]=useState('stats');
+
+  return(
+    <div style={{padding:'16px 15px 88px'}} className="fi">
+      <button onClick={onBack} style={{color:'var(--tx2)',marginBottom:14,fontSize:14,display:'flex',alignItems:'center',gap:5}}>← Retour</button>
+
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',gap:13,marginBottom:16}}>
+        <Avi ini={member.avatar} color={member.color} size={50} ring/>
+        <div>
+          <div className="grot" style={{fontSize:20,fontWeight:700}}>{member.name}</div>
+          <div style={{fontSize:12,color:'var(--tx2)',marginTop:1}}>
+            🏅 {TEAMS[member.champion]?.name||'—'}
+          </div>
+          <div style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>
+            {withPick.length} pronos joués · {total} pts
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:4,background:'var(--dk2)',borderRadius:'var(--rads)',padding:4,marginBottom:13}}>
+        {[['stats','Stats'],['history','Historique']].map(([v,l])=>(
+          <button key={v} onClick={()=>setTab(v)} style={{
+            flex:1,padding:'8px 0',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
+            background:tab===v?'var(--c)':'transparent',
+            color:tab===v?'var(--tx)':'var(--tx2)',transition:'all .15s'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab==='stats'&&(
+        <div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:13}}>
+            {[
+              {label:'Total points',val:total,unit:'pts',color:'var(--o)'},
+              {label:'Pronos joués',val:withPick.length,unit:`/ ${results.length} matchs`,color:'var(--bl)'},
+              {label:'% Vainqueur',val:withPick.length?Math.round(winOk/withPick.length*100):0,unit:'%',color:'var(--g)'},
+              {label:'% Scoreur',val:withScorer?Math.round(scorerOk/withScorer*100):0,unit:'%',color:'var(--j)'},
+            ].map(({label,val,unit,color})=>(
+              <Card key={label}>
+                <div style={{fontSize:10,color:'var(--tx2)',marginBottom:4}}>{label}</div>
+                <div style={{display:'flex',alignItems:'baseline',gap:4}}>
+                  <span className="grot" style={{fontSize:26,fontWeight:900,color}}>{val}</span>
+                  <span style={{fontSize:10,color:'var(--tx3)'}}>{unit}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+          <Card>
+            <div style={{fontSize:12,fontWeight:600,marginBottom:11}}>Précision des pronostics</div>
+            {[['Vainqueur',winOk,withPick.length,'var(--g)'],['Scoreur',scorerOk,withScorer,'var(--j)']].map(([l,ok,tot,c])=>(
+              <div key={l} style={{marginBottom:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+                  <span style={{fontSize:11,color:'var(--tx2)'}}>{l}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:c}}>{ok}/{tot}</span>
+                </div>
+                <div style={{height:6,borderRadius:3,background:'var(--bd)'}}>
+                  <div style={{height:'100%',borderRadius:3,background:c,
+                    width:`${tot?Math.round(ok/tot*100):0}%`,transition:'width .5s'}}/>
+                </div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      {tab==='history'&&(
+        <div>
+          {results.filter(x=>x.game.status==='finished').length===0&&(
+            <div style={{textAlign:'center',padding:30,color:'var(--tx3)',fontSize:13}}>Aucun résultat encore</div>
+          )}
+          {[...results].reverse().map(({game,pick,res})=>(
+            <Card key={game.id} style={{marginBottom:7}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)'}}>{game.series?.round} · {game.game}</div>
+                  <div style={{fontSize:9,color:'var(--tx3)'}}>
+                    {new Date(game.date+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'})}
+                  </div>
+                </div>
+                <span style={{fontSize:13,fontWeight:700,
+                  color:res.pts>0?'var(--g)':pick?'var(--r)':'var(--tx3)'}}>
+                  {pick?(res.pts>0?`+${res.pts} pts`:'0 pt'):'—'}
+                </span>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:pick?6:0}}>
+                <TeamBadge code={game.home} size={22}/>
+                <span className="grot" style={{fontWeight:700,fontSize:15,
+                  color:game.winner===game.home?'var(--g)':'var(--tx3)'}}>{game.hs}</span>
+                <span style={{color:'var(--tx3)'}}>—</span>
+                <span className="grot" style={{fontWeight:700,fontSize:15,
+                  color:game.winner===game.away?'var(--g)':'var(--tx3)'}}>{game.as}</span>
+                <TeamBadge code={game.away} size={22}/>
+                {game.top_scorer&&<span style={{fontSize:10,color:'var(--gold)',marginLeft:4}}>
+                  🏀 {PLAYERS.find(p=>p.id===game.top_scorer)?.short} {game.top_pts}pts
+                </span>}
+              </div>
+              {pick&&(
+                <div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+                  <OkBadge ok={res.win_ok}/>
+                  <span style={{fontSize:11,color:'var(--tx2)'}}>{TEAMS[pick.winner]?.name}</span>
+                  {pick.scorer&&<>
+                    <OkBadge ok={res.scorer_ok}/>
+                    <span style={{fontSize:11,color:'var(--tx2)'}}>{PLAYERS.find(p=>p.id===pick.scorer)?.short}</span>
+                  </>}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function RankTab({members,onSelectMember}){
+  const podium=['#F59E0B','#9CA3AF','#CD7F32'];
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:7}}>
+      {members.map((m,i)=>{
+        const rank=i+1;const isMe=m.id==='me';
+        const gap=i>0?members[i-1].total-m.total:0;
+        return(
+          <Card key={m.id} onClick={()=>onSelectMember(m)}
+            style={{borderColor:isMe?'rgba(255,92,26,.28)':'var(--bd)',
+            background:isMe?'rgba(255,92,26,.04)':'var(--c)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <div style={{width:28,height:28,borderRadius:'50%',flexShrink:0,
+                background:rank<=3?`${podium[rank-1]}20`:'var(--dk2)',
+                border:`1.5px solid ${rank<=3?podium[rank-1]:'var(--bd)'}`,
+                display:'flex',alignItems:'center',justifyContent:'center',
+                fontSize:rank<=3?13:11,fontWeight:700,color:rank<=3?podium[rank-1]:'var(--tx2)'}}>
+                {rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}
+              </div>
+              <Avi ini={m.avatar} color={m.color} size={36}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:5}}>
+                  <span style={{fontWeight:isMe?700:600,fontSize:13}}>{m.name}</span>
+                  {isMe&&<Pill color='var(--o)' style={{fontSize:9,padding:'1px 5px'}}>Moi</Pill>}
+                </div>
+                <div style={{fontSize:10,color:'var(--tx2)',marginTop:1}}>
+                  🏅 {TEAMS[m.champion]?.name}
+                  {rank>1&&<span style={{color:'var(--tx3)',marginLeft:5}}>· −{gap} pts</span>}
+                </div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div className="grot" style={{fontSize:21,fontWeight:700,
+                  color:rank===1?'var(--gold)':isMe?'var(--o)':'var(--tx)'}}>{m.total}</div>
+                <div style={{fontSize:9,color:'var(--tx3)'}}>pts</div>
+              </div>
+            </div>
+            <div style={{marginTop:9,height:3,borderRadius:2,background:'var(--bd)'}}>
+              <div style={{height:'100%',borderRadius:2,transition:'width .5s',
+                background:rank===1?'var(--gold)':isMe?'var(--o)':m.color,
+                width:`${Math.round((m.total/(members[0]?.total||1))*100)}%`}}/>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+
+function ChampLeagueTab({members}){
+  const cnt={};members.forEach(m=>{cnt[m.champion]=(cnt[m.champion]||0)+1;});
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:7}}>
+      {members.map(m=>{
+        const t=TEAMS[m.champion];const isMe=m.id==='me';
+        return(
+          <Card key={m.id} style={{borderColor:isMe?'rgba(255,92,26,.25)':'var(--bd)',
+            background:isMe?'rgba(255,92,26,.04)':'var(--c)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <Avi ini={m.avatar} color={m.color} size={32}/>
+              <span style={{flex:1,fontSize:13,fontWeight:isMe?700:500}}>
+                {m.name}{isMe&&<Pill color='var(--o)' style={{fontSize:9,marginLeft:5,padding:'1px 5px'}}>Moi</Pill>}
+              </span>
+              <div style={{display:'flex',alignItems:'center',gap:7}}>
+                <TeamBadge code={m.champion} size={30}/>
+                <span style={{fontSize:12,fontWeight:600}}>{t?.name}</span>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   PROFILE PAGE
+════════════════════════════════════════ */
+function ProfilePage({picks,championPick,setChampionPick,toast,user,onLogout}){
+  const [tab,setTab]=useState('stats');
+  const playoffsStarted=ALL_GAMES.some(g=>g.status==='finished'||g.status==='live');
+  const locked=!!championPick&&playoffsStarted;
+  const [sel,setSel]=useState(championPick);
+
+  const results=useMemo(()=>ALL_GAMES
+    .filter(g=>g.status==='finished')
+    .map(g=>({game:g,pick:picks[g.id],res:computeResult(g,picks[g.id])}))
+  ,[picks]);
+
+  const total=results.reduce((s,x)=>s+x.res.pts,0);
+  const withPick=results.filter(x=>x.pick);
+  const winOk=withPick.filter(x=>x.res.win_ok).length;
+  const scorerOk=withPick.filter(x=>x.pick?.scorer&&x.res.scorer_ok).length;
+  const withScorer=withPick.filter(x=>x.pick?.scorer).length;
+
+  const teamArr=Object.entries(TEAMS).map(([code,t])=>({code,...t}));
+
+  return(
+    <div style={{padding:'18px 15px 88px'}} className="fi">
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+        <Avi ini={(user?.name||'?').slice(0,2).toUpperCase()} color="var(--o)" size={50} ring/>
+        <div>
+          <div className="grot" style={{fontSize:20,fontWeight:700}}>{user?.name}</div>
+          <div style={{fontSize:12,color:'var(--tx2)'}}>Playoffs NBA 2025</div>
+        </div>
+      </div>
+
+      {/* Prono champion */}
+      {locked?(
+        <Card style={{marginBottom:13,background:'var(--goldb)',borderColor:'rgba(245,158,11,.25)'}}>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--gold)',letterSpacing:1,marginBottom:8}}>🏅 MON PRONO CHAMPION</div>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <TeamBadge code={sel} size={48}/>
+            <div>
+              <div style={{fontSize:16,fontWeight:700}}>{TEAMS[sel]?.city} {TEAMS[sel]?.name}</div>
+              <div style={{fontSize:12,color:'var(--tx2)',marginTop:2}}>Bonus si champion : <b style={{color:'var(--gold)'}}>+50 pts</b></div>
+              <Pill color='var(--tx3)' bg='var(--bd)' style={{fontSize:10,marginTop:5}}>🔒 Verrouillé</Pill>
+            </div>
+          </div>
+        </Card>
+      ):(
+        <Card style={{marginBottom:13,borderColor:'rgba(255,92,26,.2)',background:'var(--ob)'}}>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--o)',marginBottom:10}}>🏅 Choisis ton champion NBA</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:10}}>
+            {teamArr.map(t=>{
+              const isSel=sel===t.code;
+              return(
+                <button key={t.code} onClick={()=>setSel(t.code)} style={{
+                  padding:'8px',borderRadius:'var(--rads)',textAlign:'left',
+                  border:`2px solid ${isSel?'var(--o)':'var(--bd)'}`,
+                  background:isSel?'var(--ob)':'var(--dk2)',
+                  cursor:'pointer',transition:'all .14s',
+                  display:'flex',alignItems:'center',gap:7}}>
+                  <TeamBadge code={t.code} size={26}/>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:11}}>{t.name}</div>
+                    <div style={{fontSize:9,color:'var(--tx2)'}}>{t.reg_w}–{t.reg_l}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <button disabled={!sel} onClick={()=>{setChampionPick(sel);toast('Champion enregistré ✓');}} style={{
+            width:'100%',padding:13,borderRadius:'var(--rad)',fontWeight:700,
+            background:sel?'var(--o)':'var(--bd)',color:sel?'white':'var(--tx3)',
+            fontFamily:'Space Grotesk,sans-serif'}}>
+            {sel?`Confirmer ${TEAMS[sel]?.name} Champions`:'Sélectionne une équipe'}
+          </button>
+        </Card>
+      )}
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:4,background:'var(--dk2)',borderRadius:'var(--rads)',padding:4,marginBottom:13}}>
+        {[['stats','Mes stats'],['history','Historique']].map(([v,l])=>(
+          <button key={v} onClick={()=>setTab(v)} style={{
+            flex:1,padding:'8px 0',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
+            background:tab===v?'var(--c)':'transparent',
+            color:tab===v?'var(--tx)':'var(--tx2)',transition:'all .15s'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab==='stats'&&(
+        <div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:13}}>
+            {[
+              {label:'Total points',val:total,unit:'pts',color:'var(--o)'},
+              {label:'Pronos joués',val:withPick.length,unit:`/ ${results.length} matchs`,color:'var(--bl)'},
+              {label:'% Vainqueur',val:withPick.length?Math.round(winOk/withPick.length*100):0,unit:'%',color:'var(--g)'},
+              {label:'% Scoreur',val:withScorer?Math.round(scorerOk/withScorer*100):0,unit:'%',color:'var(--j)'},
+            ].map(({label,val,unit,color})=>(
+              <Card key={label}>
+                <div style={{fontSize:10,color:'var(--tx2)',marginBottom:4}}>{label}</div>
+                <div style={{display:'flex',alignItems:'baseline',gap:4}}>
+                  <span className="grot" style={{fontSize:26,fontWeight:900,color}}>{val}</span>
+                  <span style={{fontSize:10,color:'var(--tx3)'}}>{unit}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+          <Card>
+            <div style={{fontSize:12,fontWeight:600,marginBottom:11}}>Précision des pronostics</div>
+            {[['Vainqueur',winOk,withPick.length,'var(--g)'],['Scoreur',scorerOk,withScorer,'var(--j)']].map(([l,ok,tot,c])=>(
+              <div key={l} style={{marginBottom:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+                  <span style={{fontSize:11,color:'var(--tx2)'}}>{l}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:c}}>{ok}/{tot}</span>
+                </div>
+                <div style={{height:6,borderRadius:3,background:'var(--bd)'}}>
+                  <div style={{height:'100%',borderRadius:3,background:c,
+                    width:`${tot?Math.round(ok/tot*100):0}%`,transition:'width .5s'}}/>
+                </div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      {tab==='history'&&(
+        <div>
+          {results.length===0&&<div style={{textAlign:'center',padding:30,color:'var(--tx3)',fontSize:13}}>Aucun résultat encore</div>}
+          {[...results].reverse().map(({game,pick,res})=>(
+            <Card key={game.id} style={{marginBottom:7}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)'}}>{game.series?.round} · {game.game}</div>
+                  <div style={{fontSize:9,color:'var(--tx3)'}}>
+                    {new Date(game.date+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'})}
+                  </div>
+                </div>
+                <span style={{fontSize:13,fontWeight:700,
+                  color:res.pts>0?'var(--g)':pick?'var(--r)':'var(--tx3)'}}>
+                  {pick?(res.pts>0?`+${res.pts} pts`:'0 pt'):'—'}
+                </span>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:pick?6:0}}>
+                <TeamBadge code={game.home} size={22}/>
+                <span className="grot" style={{fontWeight:700,fontSize:15,
+                  color:game.winner===game.home?'var(--g)':'var(--tx3)'}}>{game.hs}</span>
+                <span style={{color:'var(--tx3)'}}>—</span>
+                <span className="grot" style={{fontWeight:700,fontSize:15,
+                  color:game.winner===game.away?'var(--g)':'var(--tx3)'}}>{game.as}</span>
+                <TeamBadge code={game.away} size={22}/>
+                {game.top_scorer&&<span style={{fontSize:10,color:'var(--gold)',marginLeft:4}}>
+                  🏀 {PLAYERS.find(p=>p.id===game.top_scorer)?.short} {game.top_pts}pts
+                </span>}
+              </div>
+              {pick&&(
+                <div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+                  <OkBadge ok={res.win_ok}/>
+                  <span style={{fontSize:11,color:'var(--tx2)'}}>{TEAMS[pick.winner]?.name}</span>
+                  {pick.scorer&&<>
+                    <OkBadge ok={res.scorer_ok}/>
+                    <span style={{fontSize:11,color:'var(--tx2)'}}>{PLAYERS.find(p=>p.id===pick.scorer)?.short}</span>
+                  </>}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ── Déconnexion ── */}
+      <div style={{marginTop:24,paddingTop:16,borderTop:'1px solid var(--bd)'}}>
+        <button onClick={onLogout} style={{
+          width:'100%',padding:'11px 0',borderRadius:'var(--rads)',fontSize:12,fontWeight:700,
+          background:'var(--rb)',color:'var(--r)',border:'1px solid rgba(239,68,68,.2)',
+          letterSpacing:.3}}>
+          Se déconnecter
+        </button>
+        <div style={{fontSize:10,color:'var(--tx3)',textAlign:'center',marginTop:8}}>
+          Tes pronos sont sauvegardés localement
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   PERSISTANCE LOCALSTORAGE
+   Clé préfixée par uid pour multi-utilisateurs
+════════════════════════════════════════ */
+const LS_VERSION='mpp_v1';
+
+function lsKey(uid,suffix){return`${LS_VERSION}:${uid}:${suffix}`;}
+
+function lsGet(key,fallback=null){
+  try{const v=localStorage.getItem(key);return v!=null?JSON.parse(v):fallback;}
+  catch(e){return fallback;}
+}
+
+function lsSet(key,val){
+  try{localStorage.setItem(key,JSON.stringify(val));}
+  catch(e){console.warn('[LS] quota or parse error',e);}
+}
+
+// Détecte un utilisateur déjà connecté (session persistante)
+function lsLoadSession(){
+  try{
+    const raw=localStorage.getItem(`${LS_VERSION}:session`);
+    if(!raw)return null;
+    const sess=JSON.parse(raw);
+    // session valide 30 jours
+    if(sess&&sess.user&&sess.ts&&Date.now()-sess.ts<30*24*3600*1000)return sess.user;
+    localStorage.removeItem(`${LS_VERSION}:session`);
+    return null;
+  }catch(e){return null;}
+}
+
+function lsSaveSession(user){
+  lsSet(`${LS_VERSION}:session`,{user,ts:Date.now()});
+}
+
+function lsClearSession(){
+  localStorage.removeItem(`${LS_VERSION}:session`);
+}
+
+// Hook générique avec persistance
+function usePersisted(uid,suffix,initial){
+  const key=uid?lsKey(uid,suffix):null;
+  const [val,setVal]=useState(()=>{
+    if(!key)return initial;
+    return lsGet(key,initial);
+  });
+  // Recharger quand uid change (connexion)
+  useEffect(()=>{
+    if(!key)return;
+    setVal(lsGet(key,initial));
+  },[key]);
+  const persist=useCallback((next)=>{
+    const resolved=typeof next==='function'?next(val):next;
+    setVal(resolved);
+    if(key)lsSet(key,resolved);
+  },[key,val]);
+  return[val,persist];
+}
+
+// Hook leagues persisté (structure plus complexe)
+function useLeagues(uid){
+  const INIT=[{id:'l1',name:'Ligue des Potes',code:'NBA25PO',members:MEMBERS}];
+  const key=uid?lsKey(uid,'leagues'):null;
+  const [leagues,setLeaguesRaw]=useState(()=>{
+    if(!key)return INIT;
+    const saved=lsGet(key,null);
+    // Migration: si la ligue par défaut est absente, on l'injecte
+    if(!saved)return INIT;
+    const hasDefault=saved.some(l=>l.id==='l1');
+    return hasDefault?saved:[...INIT,...saved.filter(l=>l.id!=='l1')];
+  });
+  useEffect(()=>{
+    if(!key)return;
+    const saved=lsGet(key,null);
+    if(!saved){setLeaguesRaw(INIT);return;}
+    const hasDefault=saved.some(l=>l.id==='l1');
+    setLeaguesRaw(hasDefault?saved:[...INIT,...saved.filter(l=>l.id!=='l1')]);
+  },[key]);
+  const setLeagues=useCallback((next)=>{
+    setLeaguesRaw(prev=>{
+      const resolved=typeof next==='function'?next(prev):next;
+      if(key)lsSet(key,resolved);
+      return resolved;
+    });
+  },[key]);
+  return[leagues,setLeagues];
+}
+
+/* ════════════════════════════════════════
+   APP
+════════════════════════════════════════ */
+function App(){
+  // ── Session persistante ──────────────────
+  const [user,setUser]=useState(()=>lsLoadSession());
+  const [screen,setScreen]=useState(()=>lsLoadSession()?'app':'login');
+  const [page,setPage]=useState('home');
+
+  // uid stable : on utilise le nom slugifié comme clé locale en attendant Supabase
+  const uid=user?user.uid||user.name.toLowerCase().replace(/\s+/g,'_'):null;
+
+  // ── État persisté ────────────────────────
+  // picks : on part des DEMO_PICKS si rien en localStorage
+  const [picks,setPicks]=usePersisted(uid,'picks',DEMO_PICKS);
+  const [championPick,setChampionPick]=usePersisted(uid,'champion',null);
+
+  // ── Navigation ───────────────────────────
+  const [defaultDetail,setDefaultDetail]=useState(null);
+  const [defaultPickGame,setDefaultPickGame]=useState(null);
+  const [toast,setToast]=useState(null);
+  const showToast=useCallback(m=>setToast(m),[]);
+
+  // ── Handlers ─────────────────────────────
+  const handleLogin=useCallback((u)=>{
+    // Génère un uid local si absent
+    const enriched={...u,uid:u.uid||(u.name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now())};
+    lsSaveSession(enriched);
+    setUser(enriched);
+    setScreen('app');
+  },[]);
+
+  const handleLogout=useCallback(()=>{
+    lsClearSession();
+    setUser(null);
+    setScreen('login');
+    setPage('home');
+  },[]);
+
+  if(screen==='login')return <LoginPage onLogin={handleLogin}/>;
+
+  return(
+    <div style={{maxWidth:430,margin:'0 auto',minHeight:'100vh',position:'relative'}}>
+      {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
+      <div style={{paddingBottom:64}}>
+        {page==='home'&&<HomePage picks={picks} championPick={championPick} setChampionPick={setChampionPick} toast={showToast} setPage={setPage} user={user}
+          setDetailGame={id=>{setDefaultDetail(id);setPage('matches');}}
+          setPickGame={id=>{setDefaultPickGame(id);setPage('matches');}}/>}
+        {page==='matches'&&<MatchesPage picks={picks} setPicks={setPicks} toast={showToast} defaultDetail={defaultDetail} clearDefaultDetail={()=>setDefaultDetail(null)} defaultPickGame={defaultPickGame} clearDefaultPickGame={()=>setDefaultPickGame(null)}/>}
+        {page==='leagues'&&<LeaguesPage picks={picks} uid={uid}/>}
+        {page==='profile'&&<ProfilePage picks={picks} championPick={championPick} setChampionPick={setChampionPick} toast={showToast} user={user} onLogout={handleLogout}/>}
+      </div>
+      <Nav page={page} setPage={setPage}/>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
