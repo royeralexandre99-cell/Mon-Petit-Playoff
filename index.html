@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Space+Grotesk:wght@500;700;900&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1340,26 +1341,66 @@ function StatRow({l,v}){
 /* ════════════════════════════════════════
    LEAGUES PAGE
 ════════════════════════════════════════ */
-function LeaguesPage({picks,uid}){
-  const [leagues,setLeagues]=useLeagues(uid);
-  const [activeId,setActiveId]=useState('l1');
-  const [view,setView]=useState('main');// main|create|join
-  const [tab,setTab]=useState('rank');
-  const [selectedMember,setSelectedMember]=useState(null);
-  const [newName,setNewName]=useState('');
-  const [joinCode,setJoinCode]=useState('');
+function LeaguesPage({picks,userId}){
+  const[leagues,setLeagues]=useState([]);
+  const[activeId,setActiveId]=useState(null);
+  const[view,setView]=useState('main');
+  const[tab,setTab]=useState('rank');
+  const[selectedMember,setSelectedMember]=useState(null);
+  const[newName,setNewName]=useState('');
+  const[joinCode,setJoinCode]=useState('');
+  const[joinMsg,setJoinMsg]=useState('');
+  const[members,setMembers]=useState([]);
+  const[allPicks,setAllPicks]=useState({});
+  const[loadingLeague,setLoadingLeague]=useState(true);
+
+  // Charger les ligues de l'utilisateur
+  useEffect(()=>{
+    if(!userId)return;
+    async function load(){
+      setLoadingLeague(true);
+      const ls=await sbLoadLeagues(userId);
+      setLeagues(ls);
+      if(ls.length>0)setActiveId(ls[0].id);
+      setLoadingLeague(false);
+    }
+    load();
+  },[userId]);
+
+  // Charger les membres quand la ligue active change
+  useEffect(()=>{
+    if(!activeId)return;
+    async function loadMembers(){
+      const ms=await sbLoadLeagueMembers(activeId);
+      setMembers(ms);
+      if(ms.length>0){
+        const ap=await sbLoadAllPicks(ms.map(m=>m.id));
+        setAllPicks(ap);
+      }
+    }
+    loadMembers();
+  },[activeId]);
 
   const myPts=useMemo(()=>ALL_GAMES.reduce((s,g)=>s+computeResult(g,picks[g.id]).pts,0),[picks]);
 
-  const getMembers=(league)=>league.members.map(m=>{
-    if(m.id==='me')return{...m,total:myPts};
-    const op=OTHERS_PICKS[m.id]||{};
-    const total=ALL_GAMES.reduce((s,g)=>s+computeResult(g,op[g.id]).pts,0);
-    return{...m,total};
+  const getMembersRanked=()=>members.map(m=>{
+    const isMe=m.id===userId;
+    const mp=isMe?picks:(allPicks[m.id]||{});
+    const total=ALL_GAMES.reduce((s,g)=>s+computeResult(g,mp[g.id]).pts,0);
+    return{
+      ...m,
+      id:m.id,
+      name:m.name,
+      avatar:m.name?.slice(0,2).toUpperCase()||'??',
+      color:m.avatar_color||'#FF5C1A',
+      champion:null,// à ajouter plus tard
+      total,
+      isMe
+    };
   }).sort((a,b)=>b.total-a.total);
 
   if(selectedMember)return(
-    <MemberProfile member={selectedMember} onBack={()=>setSelectedMember(null)}/>
+    <MemberProfileSb member={selectedMember} picks={selectedMember.isMe?picks:(allPicks[selectedMember.id]||{})} onBack={()=>setSelectedMember(null)}/>
   );
 
   if(view==='create')return(
@@ -1375,17 +1416,18 @@ function LeaguesPage({picks,uid}){
         <Card style={{marginBottom:12,background:'var(--ob)',borderColor:'rgba(255,92,26,.2)'}}>
           <div style={{fontSize:11,color:'var(--tx2)',marginBottom:4}}>Code d'invitation</div>
           <div className="grot" style={{fontSize:26,fontWeight:900,color:'var(--o)',letterSpacing:4}}>
-            {(newName.replace(/\s+/g,'').toUpperCase().slice(0,4)+'25').slice(0,6)}
+            {(newName.replace(/\s+/g,'').toUpperCase().slice(0,4)+'25PO').slice(0,8)}
           </div>
           <div style={{fontSize:11,color:'var(--tx2)',marginTop:4}}>Partage ce code à tes amis</div>
         </Card>
       )}
-      <button onClick={()=>{
-        if(newName.trim().length>=2){
-          const code=(newName.replace(/\s+/g,'').toUpperCase().slice(0,4)+'25').slice(0,6);
-          const newLeague={id:'l'+Date.now(),name:newName.trim(),code,members:[MEMBERS[0]]};
-          setLeagues(l=>[...l,newLeague]);
-          setActiveId(newLeague.id);
+      <button onClick={async()=>{
+        if(newName.trim().length<2)return;
+        const code=(newName.replace(/\s+/g,'').toUpperCase().slice(0,4)+'25PO').slice(0,8);
+        const league=await sbCreateLeague(userId,newName.trim(),code);
+        if(league){
+          setLeagues(l=>[...l,league]);
+          setActiveId(league.id);
           setView('main');setNewName('');
         }
       }} style={{width:'100%',padding:14,borderRadius:'var(--rad)',
@@ -1402,20 +1444,23 @@ function LeaguesPage({picks,uid}){
       <button onClick={()=>setView('main')} style={{color:'var(--tx2)',marginBottom:14,fontSize:14}}>← Retour</button>
       <div className="grot" style={{fontSize:21,fontWeight:700,marginBottom:3}}>Rejoindre une ligue</div>
       <div style={{fontSize:13,color:'var(--tx2)',marginBottom:18}}>Entre le code que ton ami t'a envoyé</div>
-      <input value={joinCode} onChange={e=>setJoinCode(e.target.value.toUpperCase())}
-        placeholder="Code (ex: NBA25PO)"
+      <input value={joinCode} onChange={e=>{setJoinCode(e.target.value.toUpperCase());setJoinMsg('');}}
+        placeholder="Code (ex: NBA125PO)"
         style={{width:'100%',padding:'13px 14px',borderRadius:'var(--rad)',
           background:'var(--c)',border:`1px solid ${joinCode.length>=4?'var(--o)':'var(--bd)'}`,
           color:'var(--tx)',fontSize:22,fontWeight:700,letterSpacing:4,textAlign:'center',marginBottom:10}}/>
-      {joinCode.length>=4&&(
-        <Card style={{marginBottom:12,background:'var(--gb)',borderColor:'rgba(34,197,94,.2)'}}>
-          <div style={{fontSize:12,color:'var(--g)',fontWeight:700}}>✓ Code valide — Ligue des Potes 2025</div>
-        </Card>
-      )}
-      <button onClick={()=>{
-        if(joinCode.trim().length>=4){
-          setView('main');setJoinCode('');
-        }
+      {joinMsg&&<Card style={{marginBottom:12,background:joinMsg.includes('!')?'var(--gb)':'var(--rb)',borderColor:joinMsg.includes('!')?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)'}}>
+        <div style={{fontSize:12,color:joinMsg.includes('!')?'var(--g)':'var(--r)',fontWeight:700}}>{joinMsg}</div>
+      </Card>}
+      <button onClick={async()=>{
+        if(joinCode.trim().length<4)return;
+        const{league,error}=await sbJoinLeague(userId,joinCode.trim());
+        if(error){setJoinMsg('❌ '+error);return;}
+        setJoinMsg('✅ Ligue rejointe !');
+        const ls=await sbLoadLeagues(userId);
+        setLeagues(ls);
+        setActiveId(league.id);
+        setTimeout(()=>{setView('main');setJoinCode('');setJoinMsg('');},1000);
       }} style={{width:'100%',padding:14,borderRadius:'var(--rad)',
         background:joinCode.trim().length>=4?'var(--o)':'var(--bd)',
         color:joinCode.trim().length>=4?'white':'var(--tx3)',fontWeight:700,fontSize:15,
@@ -1425,8 +1470,8 @@ function LeaguesPage({picks,uid}){
     </div>
   );
 
-  const league=leagues.find(l=>l.id===activeId)||leagues[0];
-  const members=getMembers(league);
+  const league=leagues.find(l=>l.id===activeId);
+  const ranked=getMembersRanked();
 
   return(
     <div style={{padding:'18px 15px 88px'}} className="fi">
@@ -1444,112 +1489,123 @@ function LeaguesPage({picks,uid}){
         </div>
       </div>
 
-      {/* Sélecteur ligues */}
-      {leagues.length>1&&(
-        <div style={{display:'flex',gap:6,overflowX:'auto',marginBottom:13,paddingBottom:4}}>
-          {leagues.map(l=>(
-            <button key={l.id} onClick={()=>setActiveId(l.id)} style={{
-              flexShrink:0,padding:'6px 12px',borderRadius:'var(--rads)',fontSize:12,fontWeight:600,
-              border:`1.5px solid ${activeId===l.id?'var(--o)':'var(--bd)'}`,
-              background:activeId===l.id?'var(--ob)':'var(--c)',
-              color:activeId===l.id?'var(--o)':'var(--tx2)'}}>
-              {l.name}
+      {loadingLeague&&<div style={{textAlign:'center',padding:30,color:'var(--tx2)'}}>Chargement...</div>}
+
+      {!loadingLeague&&leagues.length===0&&(
+        <Card style={{textAlign:'center',padding:28}}>
+          <div style={{fontSize:28,marginBottom:8}}>🏀</div>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:6}}>Pas encore de ligue</div>
+          <div style={{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Crée une ligue et invite tes amis !</div>
+          <button onClick={()=>setView('create')} style={{padding:'10px 20px',borderRadius:'var(--rads)',
+            background:'var(--o)',color:'white',fontWeight:700,fontSize:13}}>
+            Créer ma première ligue →
+          </button>
+        </Card>
+      )}
+
+      {!loadingLeague&&leagues.length>0&&<>
+        {leagues.length>1&&(
+          <div style={{display:'flex',gap:6,overflowX:'auto',marginBottom:13,paddingBottom:4}}>
+            {leagues.map(l=>(
+              <button key={l.id} onClick={()=>setActiveId(l.id)} style={{
+                flexShrink:0,padding:'6px 12px',borderRadius:'var(--rads)',fontSize:12,fontWeight:600,
+                border:`1.5px solid ${activeId===l.id?'var(--o)':'var(--bd)'}`,
+                background:activeId===l.id?'var(--ob)':'var(--c)',
+                color:activeId===l.id?'var(--o)':'var(--tx2)'}}>
+                {l.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {league&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:15}}>{league.name}</div>
+            <div style={{fontSize:12,color:'var(--tx2)',display:'flex',alignItems:'center',gap:6,marginTop:1}}>
+              Code : <b style={{color:'var(--o)',letterSpacing:2}}>{league.code}</b>
+              <button onClick={()=>{try{navigator.clipboard.writeText(league.code)}catch(e){}}}
+                style={{fontSize:10,padding:'1px 6px',borderRadius:5,background:'var(--bd)',color:'var(--tx2)',fontWeight:600}}>
+                Copier
+              </button>
+            </div>
+          </div>
+          <div style={{fontSize:12,color:'var(--tx2)'}}>{members.length} joueur{members.length>1?'s':''}</div>
+        </div>}
+
+        <div style={{display:'flex',gap:4,background:'var(--dk2)',borderRadius:'var(--rads)',padding:4,marginBottom:13}}>
+          {[['rank','Classement'],['invite','Inviter']].map(([v,l])=>(
+            <button key={v} onClick={()=>setTab(v)} style={{
+              flex:1,padding:'8px 4px',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
+              background:tab===v?'var(--c)':'transparent',
+              color:tab===v?'var(--tx)':'var(--tx2)'}}>
+              {l}
             </button>
           ))}
         </div>
-      )}
 
-      {/* Ligue active */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-        <div>
-          <div style={{fontWeight:700,fontSize:15}}>{league?.name}</div>
-          <div style={{fontSize:12,color:'var(--tx2)',display:'flex',alignItems:'center',gap:6,marginTop:1}}>
-            Code : <b style={{color:'var(--o)',letterSpacing:2}}>{league?.code}</b>
-            <button onClick={()=>{try{navigator.clipboard.writeText(league?.code)}catch(e){}}}
-              style={{fontSize:10,padding:'1px 6px',borderRadius:5,background:'var(--bd)',color:'var(--tx2)',fontWeight:600}}>Copier</button>
-          </div>
-        </div>
-        <div style={{fontSize:12,color:'var(--tx2)'}}>{members.length} joueurs</div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{display:'flex',gap:4,background:'var(--dk2)',borderRadius:'var(--rads)',padding:4,marginBottom:13}}>
-        {[['rank','Classement'],['champion','Champions']].map(([v,l])=>(
-          <button key={v} onClick={()=>setTab(v)} style={{
-            flex:1,padding:'8px 4px',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
-            background:tab===v?'var(--c)':'transparent',
-            color:tab===v?'var(--tx)':'var(--tx2)',transition:'all .15s'}}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      {tab==='rank'&&<RankTab members={members} onSelectMember={setSelectedMember}/>}
-      {tab==='champion'&&<ChampLeagueTab members={members}/>}
+        {tab==='rank'&&(
+          ranked.length===0
+            ?<div style={{textAlign:'center',padding:24,color:'var(--tx3)',fontSize:13}}>Aucun membre encore</div>
+            :<RankTab members={ranked} onSelectMember={setSelectedMember}/>
+        )}
+        {tab==='invite'&&league&&(
+          <Card style={{textAlign:'center',padding:20}}>
+            <div style={{fontSize:13,color:'var(--tx2)',marginBottom:10}}>Partage ce code à tes amis</div>
+            <div className="grot" style={{fontSize:32,fontWeight:900,color:'var(--o)',letterSpacing:5,marginBottom:10}}>
+              {league.code}
+            </div>
+            <button onClick={()=>{
+              try{
+                navigator.share
+                  ?navigator.share({title:'Mon Petit Playoff',text:`Rejoins ma ligue ! Code : ${league.code}`,url:window.location.origin})
+                  :navigator.clipboard.writeText(`Rejoins ma ligue NBA Pronos ! Code : ${league.code} → ${window.location.origin}`);
+              }catch(e){}
+            }} style={{padding:'11px 22px',borderRadius:'var(--rads)',
+              background:'var(--o)',color:'white',fontWeight:700,fontSize:13}}>
+              📤 Partager le lien
+            </button>
+          </Card>
+        )}
+      </>}
     </div>
   );
 }
 
-function MemberProfile({member,onBack}){
-  const isMe=member.id==='me';
-  const memberPicks=isMe?null:(OTHERS_PICKS[member.id]||{});
+function MemberProfileSb({member,picks,onBack}){
   const results=useMemo(()=>ALL_GAMES
     .filter(g=>g.status==='finished')
-    .map(g=>{
-      const pick=isMe?null:memberPicks[g.id];
-      const res=computeResult(g,pick||{});
-      return{game:g,pick,res};
-    })
-  ,[member]);
-
+    .map(g=>({game:g,pick:picks[g.id],res:computeResult(g,picks[g.id])}))
+  ,[picks]);
   const total=results.reduce((s,x)=>s+x.res.pts,0);
   const withPick=results.filter(x=>x.pick);
   const winOk=withPick.filter(x=>x.res.win_ok).length;
   const scorerOk=withPick.filter(x=>x.pick?.scorer&&x.res.scorer_ok).length;
   const withScorer=withPick.filter(x=>x.pick?.scorer).length;
-
-  // Ranking evolution: cumulative pts over time
-  const evolution=[];let cum=0;
-  results.forEach(({res})=>{cum+=res.pts;evolution.push(cum);});
-
-  const [tab,setTab]=useState('stats');
-
+  const[tab,setTab]=useState('stats');
   return(
     <div style={{padding:'16px 15px 88px'}} className="fi">
-      <button onClick={onBack} style={{color:'var(--tx2)',marginBottom:14,fontSize:14,display:'flex',alignItems:'center',gap:5}}>← Retour</button>
-
-      {/* Header */}
+      <button onClick={onBack} style={{color:'var(--tx2)',marginBottom:14,fontSize:14}}>← Retour</button>
       <div style={{display:'flex',alignItems:'center',gap:13,marginBottom:16}}>
         <Avi ini={member.avatar} color={member.color} size={50} ring/>
         <div>
           <div className="grot" style={{fontSize:20,fontWeight:700}}>{member.name}</div>
-          <div style={{fontSize:12,color:'var(--tx2)',marginTop:1}}>
-            🏅 {TEAMS[member.champion]?.name||'—'}
-          </div>
-          <div style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>
-            {withPick.length} pronos joués · {total} pts
-          </div>
+          <div style={{fontSize:11,color:'var(--tx3)',marginTop:1}}>{withPick.length} pronos · {total} pts</div>
         </div>
       </div>
-
-      {/* Tabs */}
       <div style={{display:'flex',gap:4,background:'var(--dk2)',borderRadius:'var(--rads)',padding:4,marginBottom:13}}>
         {[['stats','Stats'],['history','Historique']].map(([v,l])=>(
-          <button key={v} onClick={()=>setTab(v)} style={{
-            flex:1,padding:'8px 0',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
-            background:tab===v?'var(--c)':'transparent',
-            color:tab===v?'var(--tx)':'var(--tx2)',transition:'all .15s'}}>
+          <button key={v} onClick={()=>setTab(v)} style={{flex:1,padding:'8px 0',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
+            background:tab===v?'var(--c)':'transparent',color:tab===v?'var(--tx)':'var(--tx2)'}}>
             {l}
           </button>
         ))}
       </div>
-
       {tab==='stats'&&(
         <div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:13}}>
             {[
               {label:'Total points',val:total,unit:'pts',color:'var(--o)'},
-              {label:'Pronos joués',val:withPick.length,unit:`/ ${results.length} matchs`,color:'var(--bl)'},
+              {label:'Pronos joués',val:withPick.length,unit:`/ ${results.length}`,color:'var(--bl)'},
               {label:'% Vainqueur',val:withPick.length?Math.round(winOk/withPick.length*100):0,unit:'%',color:'var(--g)'},
               {label:'% Scoreur',val:withScorer?Math.round(scorerOk/withScorer*100):0,unit:'%',color:'var(--j)'},
             ].map(({label,val,unit,color})=>(
@@ -1562,80 +1618,43 @@ function MemberProfile({member,onBack}){
               </Card>
             ))}
           </div>
-          <Card>
-            <div style={{fontSize:12,fontWeight:600,marginBottom:11}}>Précision des pronostics</div>
-            {[['Vainqueur',winOk,withPick.length,'var(--g)'],['Scoreur',scorerOk,withScorer,'var(--j)']].map(([l,ok,tot,c])=>(
-              <div key={l} style={{marginBottom:10}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
-                  <span style={{fontSize:11,color:'var(--tx2)'}}>{l}</span>
-                  <span style={{fontSize:11,fontWeight:700,color:c}}>{ok}/{tot}</span>
-                </div>
-                <div style={{height:6,borderRadius:3,background:'var(--bd)'}}>
-                  <div style={{height:'100%',borderRadius:3,background:c,
-                    width:`${tot?Math.round(ok/tot*100):0}%`,transition:'width .5s'}}/>
-                </div>
-              </div>
-            ))}
-          </Card>
         </div>
       )}
-
       {tab==='history'&&(
         <div>
-          {results.filter(x=>x.game.status==='finished').length===0&&(
-            <div style={{textAlign:'center',padding:30,color:'var(--tx3)',fontSize:13}}>Aucun résultat encore</div>
-          )}
-          {[...results].reverse().map(({game,pick,res})=>(
+          {[...results].sort((a,b)=>new Date(b.game.date)-new Date(a.game.date)).map(({game,pick,res})=>(
             <Card key={game.id} style={{marginBottom:7}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
-                <div>
-                  <div style={{fontSize:10,fontWeight:600,color:'var(--tx2)'}}>{game.series?.round} · {game.game}</div>
-                  <div style={{fontSize:9,color:'var(--tx3)'}}>
-                    {new Date(game.date+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'})}
-                  </div>
-                </div>
-                <span style={{fontSize:13,fontWeight:700,
-                  color:res.pts>0?'var(--g)':pick?'var(--r)':'var(--tx3)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <div style={{fontSize:10,color:'var(--tx2)'}}>{game.series?.round} · Match {game.game_num}</div>
+                <span style={{fontSize:13,fontWeight:700,color:res.pts>0?'var(--g)':pick?'var(--r)':'var(--tx3)'}}>
                   {pick?(res.pts>0?`+${res.pts} pts`:'0 pt'):'—'}
                 </span>
               </div>
-              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:pick?6:0}}>
-                <TeamBadge code={game.home} size={22}/>
-                <span className="grot" style={{fontWeight:700,fontSize:15,
-                  color:game.winner===game.home?'var(--g)':'var(--tx3)'}}>{game.hs}</span>
+              <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:pick?5:0}}>
+                <TeamBadge code={game.home} size={20}/>
+                <span className="grot" style={{fontWeight:700,fontSize:14,color:game.winner===game.home?'var(--g)':'var(--tx3)'}}>{game.hs}</span>
                 <span style={{color:'var(--tx3)'}}>—</span>
-                <span className="grot" style={{fontWeight:700,fontSize:15,
-                  color:game.winner===game.away?'var(--g)':'var(--tx3)'}}>{game.as}</span>
-                <TeamBadge code={game.away} size={22}/>
-                {game.top_scorer&&<span style={{fontSize:10,color:'var(--gold)',marginLeft:4}}>
-                  🏀 {PLAYERS.find(p=>p.id===game.top_scorer)?.short} {game.top_pts}pts
-                </span>}
+                <span className="grot" style={{fontWeight:700,fontSize:14,color:game.winner===game.away?'var(--g)':'var(--tx3)'}}>{game.as}</span>
+                <TeamBadge code={game.away} size={20}/>
               </div>
-              {pick&&(
-                <div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
-                  <OkBadge ok={res.win_ok}/>
-                  <span style={{fontSize:11,color:'var(--tx2)'}}>{TEAMS[pick.winner]?.name}</span>
-                  {pick.scorer&&<>
-                    <OkBadge ok={res.scorer_ok}/>
-                    <span style={{fontSize:11,color:'var(--tx2)'}}>{PLAYERS.find(p=>p.id===pick.scorer)?.short}</span>
-                  </>}
-                </div>
-              )}
+              {pick&&<div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+                <OkBadge ok={res.win_ok}/>
+                <span style={{fontSize:11,color:'var(--tx2)'}}>{TEAMS[pick.winner]?.name}</span>
+                {pick.scorer&&<><OkBadge ok={res.scorer_ok}/><span style={{fontSize:11,color:'var(--tx2)'}}>{PLAYERS.find(p=>p.id===pick.scorer)?.short}</span></>}
+              </div>}
             </Card>
           ))}
         </div>
       )}
-
     </div>
   );
 }
-
 function RankTab({members,onSelectMember}){
   const podium=['#F59E0B','#9CA3AF','#CD7F32'];
   return(
     <div style={{display:'flex',flexDirection:'column',gap:7}}>
       {members.map((m,i)=>{
-        const rank=i+1;const isMe=m.id==='me';
+        const rank=i+1;const isMe=m.isMe;
         const gap=i>0?members[i-1].total-m.total:0;
         return(
           <Card key={m.id} onClick={()=>onSelectMember(m)}
@@ -1656,8 +1675,7 @@ function RankTab({members,onSelectMember}){
                   {isMe&&<Pill color='var(--o)' style={{fontSize:9,padding:'1px 5px'}}>Moi</Pill>}
                 </div>
                 <div style={{fontSize:10,color:'var(--tx2)',marginTop:1}}>
-                  🏅 {TEAMS[m.champion]?.name}
-                  {rank>1&&<span style={{color:'var(--tx3)',marginLeft:5}}>· −{gap} pts</span>}
+                  {rank>1&&<span style={{color:'var(--tx3)'}}>−{gap} pts</span>}
                 </div>
               </div>
               <div style={{textAlign:'right'}}>
@@ -1670,33 +1688,6 @@ function RankTab({members,onSelectMember}){
               <div style={{height:'100%',borderRadius:2,transition:'width .5s',
                 background:rank===1?'var(--gold)':isMe?'var(--o)':m.color,
                 width:`${Math.round((m.total/(members[0]?.total||1))*100)}%`}}/>
-            </div>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-
-function ChampLeagueTab({members}){
-  const cnt={};members.forEach(m=>{cnt[m.champion]=(cnt[m.champion]||0)+1;});
-  return(
-    <div style={{display:'flex',flexDirection:'column',gap:7}}>
-      {members.map(m=>{
-        const t=TEAMS[m.champion];const isMe=m.id==='me';
-        return(
-          <Card key={m.id} style={{borderColor:isMe?'rgba(255,92,26,.25)':'var(--bd)',
-            background:isMe?'rgba(255,92,26,.04)':'var(--c)'}}>
-            <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <Avi ini={m.avatar} color={m.color} size={32}/>
-              <span style={{flex:1,fontSize:13,fontWeight:isMe?700:500}}>
-                {m.name}{isMe&&<Pill color='var(--o)' style={{fontSize:9,marginLeft:5,padding:'1px 5px'}}>Moi</Pill>}
-              </span>
-              <div style={{display:'flex',alignItems:'center',gap:7}}>
-                <TeamBadge code={m.champion} size={30}/>
-                <span style={{fontSize:12,fontWeight:600}}>{t?.name}</span>
-              </div>
             </div>
           </Card>
         );
@@ -1833,7 +1824,7 @@ function ProfilePage({picks,championPick,setChampionPick,toast,user,onLogout}){
       {tab==='history'&&(
         <div>
           {results.length===0&&<div style={{textAlign:'center',padding:30,color:'var(--tx3)',fontSize:13}}>Aucun résultat encore</div>}
-          {[...results].reverse().map(({game,pick,res})=>(
+          {[...results].sort((a,b)=>new Date(b.game.date)-new Date(a.game.date)).map(({game,pick,res})=>(
             <Card key={game.id} style={{marginBottom:7}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
                 <div>
@@ -1891,144 +1882,316 @@ function ProfilePage({picks,championPick,setChampionPick,toast,user,onLogout}){
 }
 
 /* ════════════════════════════════════════
-   PERSISTANCE LOCALSTORAGE
-   Clé préfixée par uid pour multi-utilisateurs
+   SUPABASE — client + helpers
 ════════════════════════════════════════ */
-const LS_VERSION='mpp_v1';
+const SUPABASE_URL='https://fsicjzkadzlxfcvyuzvj.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzaWNqemthZHpseGZjdnl1enZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NzM5MzYsImV4cCI6MjA5NzM0OTkzNn0.l6Cnee4CDzNlzXoYpGweDkTGYkgGPf6awLz5f7qAEss';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-function lsKey(uid,suffix){return`${LS_VERSION}:${uid}:${suffix}`;}
-
-function lsGet(key,fallback=null){
-  try{const v=localStorage.getItem(key);return v!=null?JSON.parse(v):fallback;}
-  catch(e){return fallback;}
-}
-
-function lsSet(key,val){
-  try{localStorage.setItem(key,JSON.stringify(val));}
-  catch(e){console.warn('[LS] quota or parse error',e);}
-}
-
-// Détecte un utilisateur déjà connecté (session persistante)
-function lsLoadSession(){
-  try{
-    const raw=localStorage.getItem(`${LS_VERSION}:session`);
-    if(!raw)return null;
-    const sess=JSON.parse(raw);
-    // session valide 30 jours
-    if(sess&&sess.user&&sess.ts&&Date.now()-sess.ts<30*24*3600*1000)return sess.user;
-    localStorage.removeItem(`${LS_VERSION}:session`);
-    return null;
-  }catch(e){return null;}
-}
-
-function lsSaveSession(user){
-  lsSet(`${LS_VERSION}:session`,{user,ts:Date.now()});
-}
-
-function lsClearSession(){
-  localStorage.removeItem(`${LS_VERSION}:session`);
-}
-
-// Hook générique avec persistance
-function usePersisted(uid,suffix,initial){
-  const key=uid?lsKey(uid,suffix):null;
-  const [val,setVal]=useState(()=>{
-    if(!key)return initial;
-    return lsGet(key,initial);
+// ── Auth ───────────────────────────────────
+async function sbSignInGoogle(){
+  const{error}=await sb.auth.signInWithOAuth({
+    provider:'google',
+    options:{redirectTo:window.location.origin}
   });
-  // Recharger quand uid change (connexion)
-  useEffect(()=>{
-    if(!key)return;
-    setVal(lsGet(key,initial));
-  },[key]);
-  const persist=useCallback((next)=>{
-    const resolved=typeof next==='function'?next(val):next;
-    setVal(resolved);
-    if(key)lsSet(key,resolved);
-  },[key,val]);
-  return[val,persist];
+  if(error)console.error(error);
 }
 
-// Hook leagues persisté (structure plus complexe)
-function useLeagues(uid){
-  const INIT=[{id:'l1',name:'Ligue des Potes',code:'NBA25PO',members:MEMBERS}];
-  const key=uid?lsKey(uid,'leagues'):null;
-  const [leagues,setLeaguesRaw]=useState(()=>{
-    if(!key)return INIT;
-    const saved=lsGet(key,null);
-    // Migration: si la ligue par défaut est absente, on l'injecte
-    if(!saved)return INIT;
-    const hasDefault=saved.some(l=>l.id==='l1');
-    return hasDefault?saved:[...INIT,...saved.filter(l=>l.id!=='l1')];
-  });
-  useEffect(()=>{
-    if(!key)return;
-    const saved=lsGet(key,null);
-    if(!saved){setLeaguesRaw(INIT);return;}
-    const hasDefault=saved.some(l=>l.id==='l1');
-    setLeaguesRaw(hasDefault?saved:[...INIT,...saved.filter(l=>l.id!=='l1')]);
-  },[key]);
-  const setLeagues=useCallback((next)=>{
-    setLeaguesRaw(prev=>{
-      const resolved=typeof next==='function'?next(prev):next;
-      if(key)lsSet(key,resolved);
-      return resolved;
-    });
-  },[key]);
-  return[leagues,setLeagues];
+async function sbSignInEmail(email,password){
+  const{data,error}=await sb.auth.signInWithPassword({email,password});
+  return{user:data?.user,error};
+}
+
+async function sbSignUpEmail(email,password,name){
+  const{data,error}=await sb.auth.signUp({email,password});
+  if(!error&&data.user){
+    await sb.from('users').upsert({id:data.user.id,name});
+  }
+  return{user:data?.user,error};
+}
+
+async function sbSignOut(){
+  await sb.auth.signOut();
+}
+
+// ── Picks ──────────────────────────────────
+async function sbLoadPicks(userId){
+  const{data}=await sb.from('picks').select('*').eq('user_id',userId);
+  if(!data||data.length===0)return{};
+  return data.reduce((acc,p)=>{
+    acc[p.game_id]={winner:p.winner,scorer:p.scorer};
+    return acc;
+  },{});
+}
+
+async function sbSavePick(userId,gameId,winner,scorer){
+  await sb.from('picks').upsert(
+    {user_id:userId,game_id:gameId,winner,scorer,updated_at:new Date().toISOString()},
+    {onConflict:'user_id,game_id'}
+  );
+}
+
+// ── Champion ───────────────────────────────
+async function sbLoadChampion(userId){
+  const{data}=await sb.from('champion_picks').select('team_code').eq('user_id',userId).maybeSingle();
+  return data?.team_code||null;
+}
+
+async function sbSaveChampion(userId,teamCode){
+  await sb.from('champion_picks').upsert({user_id:userId,team_code:teamCode});
+}
+
+// ── Ligues ─────────────────────────────────
+async function sbLoadLeagues(userId){
+  const{data}=await sb
+    .from('league_members')
+    .select('league_id, leagues(id,name,code,created_by)')
+    .eq('user_id',userId);
+  if(!data)return[];
+  return data.map(r=>r.leagues).filter(Boolean);
+}
+
+async function sbCreateLeague(userId,name,code){
+  const{data,error}=await sb.from('leagues').insert({name,code,created_by:userId}).select().single();
+  if(error||!data)return null;
+  await sb.from('league_members').insert({league_id:data.id,user_id:userId});
+  return data;
+}
+
+async function sbJoinLeague(userId,code){
+  const{data:league}=await sb.from('leagues').select('*').eq('code',code.toUpperCase()).maybeSingle();
+  if(!league)return{error:'Code invalide'};
+  const{error}=await sb.from('league_members').upsert({league_id:league.id,user_id:userId});
+  if(error)return{error:'Déjà membre ou erreur'};
+  return{league};
+}
+
+async function sbLoadLeagueMembers(leagueId){
+  const{data}=await sb
+    .from('league_members')
+    .select('user_id, users(id,name,avatar_color)')
+    .eq('league_id',leagueId);
+  if(!data)return[];
+  return data.map(r=>r.users).filter(Boolean);
+}
+
+async function sbLoadAllPicks(userIds){
+  const{data}=await sb.from('picks').select('*').in('user_id',userIds);
+  if(!data)return{};
+  // {userId: {gameId: {winner,scorer}}}
+  return data.reduce((acc,p)=>{
+    if(!acc[p.user_id])acc[p.user_id]={};
+    acc[p.user_id][p.game_id]={winner:p.winner,scorer:p.scorer};
+    return acc;
+  },{});
 }
 
 /* ════════════════════════════════════════
-   APP
+   LOGIN PAGE — version Supabase
+════════════════════════════════════════ */
+function LoginPageSb({onLogin}){
+  const[mode,setMode]=useState('choice');// choice|login|signup
+  const[email,setEmail]=useState('');
+  const[password,setPassword]=useState('');
+  const[name,setName]=useState('');
+  const[loading,setLoading]=useState(false);
+  const[err,setErr]=useState('');
+
+  async function handleEmail(){
+    if(!email||!password)return;
+    setLoading(true);setErr('');
+    if(mode==='login'){
+      const{user,error}=await sbSignInEmail(email,password);
+      if(error){setErr('Email ou mot de passe incorrect');setLoading(false);return;}
+      // onLogin sera appelé via onAuthStateChange dans App
+    } else {
+      if(!name.trim()){setErr('Entre ton prénom');setLoading(false);return;}
+      const{user,error}=await sbSignUpEmail(email,password,name.trim());
+      if(error){setErr(error.message);setLoading(false);return;}
+    }
+    setLoading(false);
+  }
+
+  return(
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',
+      alignItems:'center',justifyContent:'center',padding:28}}>
+      <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',
+        justifyContent:'center',gap:5}}>
+        <div style={{fontSize:70}}>🏀</div>
+        <div className="grot" style={{fontSize:34,fontWeight:900,color:'var(--o)',letterSpacing:-1}}>Mon Petit</div>
+        <div className="grot" style={{fontSize:34,fontWeight:900,letterSpacing:-1,marginTop:-6}}>Playoff</div>
+        <div style={{fontSize:13,color:'var(--tx2)',marginTop:6,textAlign:'center'}}>
+          Pronos entre amis · Playoffs NBA 2025
+        </div>
+      </div>
+      <div style={{width:'100%',paddingBottom:36,display:'flex',flexDirection:'column',gap:0}}>
+        {/* Google */}
+        <button onClick={sbSignInGoogle} style={{
+          width:'100%',padding:15,borderRadius:'var(--rad)',
+          background:'white',color:'#111',fontWeight:700,fontSize:14,
+          display:'flex',alignItems:'center',justifyContent:'center',gap:9,
+          marginBottom:10,boxShadow:'0 2px 12px rgba(0,0,0,.45)'}}>
+          <svg width="17" height="17" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.615 24 12.255 24z"/><path fill="#FBBC05" d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 000 10.76l3.98-3.09z"/><path fill="#EA4335" d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.64 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+          Continuer avec Google
+        </button>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+          <div style={{flex:1,height:1,background:'var(--bd)'}}/>
+          <span style={{fontSize:11,color:'var(--tx3)'}}>ou par email</span>
+          <div style={{flex:1,height:1,background:'var(--bd)'}}/>
+        </div>
+        {/* Toggle login/signup */}
+        <div style={{display:'flex',gap:4,background:'var(--dk2)',borderRadius:'var(--rads)',padding:4,marginBottom:10}}>
+          {[['login','Connexion'],['signup','Inscription']].map(([v,l])=>(
+            <button key={v} onClick={()=>{setMode(v);setErr('');}} style={{
+              flex:1,padding:'8px 0',borderRadius:'var(--radxs)',fontSize:12,fontWeight:600,
+              background:mode===v?'var(--c)':'transparent',
+              color:mode===v?'var(--tx)':'var(--tx2)'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {mode==='signup'&&(
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ton prénom"
+            style={{width:'100%',padding:'12px 14px',borderRadius:'var(--rad)',
+              background:'var(--c)',border:`1px solid ${name?'var(--o)':'var(--bd)'}`,
+              color:'var(--tx)',fontSize:14,marginBottom:8}}/>
+        )}
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email"
+          style={{width:'100%',padding:'12px 14px',borderRadius:'var(--rad)',
+            background:'var(--c)',border:`1px solid ${email?'var(--o)':'var(--bd)'}`,
+            color:'var(--tx)',fontSize:14,marginBottom:8}}/>
+        <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Mot de passe" type="password"
+          style={{width:'100%',padding:'12px 14px',borderRadius:'var(--rad)',
+            background:'var(--c)',border:`1px solid ${password?'var(--o)':'var(--bd)'}`,
+            color:'var(--tx)',fontSize:14,marginBottom:10}}/>
+        {err&&<div style={{fontSize:12,color:'var(--r)',marginBottom:8,textAlign:'center'}}>{err}</div>}
+        <button onClick={handleEmail} disabled={loading||!email||!password} style={{
+          width:'100%',padding:14,borderRadius:'var(--rad)',
+          background:(email&&password)?'var(--o)':'var(--bd)',
+          color:(email&&password)?'white':'var(--tx3)',
+          fontWeight:700,fontSize:15,fontFamily:'Space Grotesk,sans-serif'}}>
+          {loading?'Chargement...':(mode==='login'?'Se connecter →':'Créer mon compte →')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
+   APP — version Supabase
 ════════════════════════════════════════ */
 function App(){
-  // ── Session persistante ──────────────────
-  const [user,setUser]=useState(()=>lsLoadSession());
-  const [screen,setScreen]=useState(()=>lsLoadSession()?'app':'login');
-  const [page,setPage]=useState('home');
-
-  // uid stable : on utilise le nom slugifié comme clé locale en attendant Supabase
-  const uid=user?user.uid||user.name.toLowerCase().replace(/\s+/g,'_'):null;
-
-  // ── État persisté ────────────────────────
-  // picks : on part des DEMO_PICKS si rien en localStorage
-  const [picks,setPicks]=usePersisted(uid,'picks',DEMO_PICKS);
-  const [championPick,setChampionPick]=usePersisted(uid,'champion',null);
-
-  // ── Navigation ───────────────────────────
-  const [defaultDetail,setDefaultDetail]=useState(null);
-  const [defaultPickGame,setDefaultPickGame]=useState(null);
-  const [toast,setToast]=useState(null);
+  const[authUser,setAuthUser]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[page,setPage]=useState('home');
+  const[picks,setPicks]=useState({});
+  const[championPick,setChampionPick]=useState(null);
+  const[defaultDetail,setDefaultDetail]=useState(null);
+  const[defaultPickGame,setDefaultPickGame]=useState(null);
+  const[toast,setToast]=useState(null);
   const showToast=useCallback(m=>setToast(m),[]);
 
-  // ── Handlers ─────────────────────────────
-  const handleLogin=useCallback((u)=>{
-    // Génère un uid local si absent
-    const enriched={...u,uid:u.uid||(u.name.toLowerCase().replace(/\s+/g,'_')+'_'+Date.now())};
-    lsSaveSession(enriched);
-    setUser(enriched);
-    setScreen('app');
+  // ── Écouter la session Supabase ────────────
+  useEffect(()=>{
+    const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,session)=>{
+      if(session?.user){
+        const u=session.user;
+        // Charger ou créer le profil
+        let{data:profile}=await sb.from('users').select('*').eq('id',u.id).maybeSingle();
+        if(!profile){
+          const name=u.user_metadata?.full_name||u.email?.split('@')[0]||'Joueur';
+          await sb.from('users').upsert({id:u.id,name});
+          profile={id:u.id,name};
+        }
+        setAuthUser({...u,name:profile.name,avatar_color:profile.avatar_color||'#FF5C1A'});
+        // Charger picks + champion en parallèle
+        const[p,c]=await Promise.all([sbLoadPicks(u.id),sbLoadChampion(u.id)]);
+        setPicks(p);
+        setChampionPick(c);
+      } else {
+        setAuthUser(null);
+        setPicks({});
+        setChampionPick(null);
+      }
+      setLoading(false);
+    });
+    return()=>subscription.unsubscribe();
   },[]);
 
-  const handleLogout=useCallback(()=>{
-    lsClearSession();
-    setUser(null);
-    setScreen('login');
+  // ── Sauvegarder un pick ────────────────────
+  const handleSetPicks=useCallback((updater)=>{
+    setPicks(prev=>{
+      const next=typeof updater==='function'?updater(prev):updater;
+      return next;
+    });
+  },[]);
+
+  const handleSavePick=useCallback(async(gameId,winner,scorer)=>{
+    if(!authUser)return;
+    setPicks(prev=>({...prev,[gameId]:{winner,scorer}}));
+    await sbSavePick(authUser.id,gameId,winner,scorer);
+  },[authUser]);
+
+  // ── Sauvegarder le champion ────────────────
+  const handleSetChampion=useCallback(async(teamCode)=>{
+    if(!authUser)return;
+    setChampionPick(teamCode);
+    await sbSaveChampion(authUser.id,teamCode);
+  },[authUser]);
+
+  // ── Déconnexion ────────────────────────────
+  const handleLogout=useCallback(async()=>{
+    await sbSignOut();
     setPage('home');
   },[]);
 
-  if(screen==='login')return <LoginPage onLogin={handleLogin}/>;
+  if(loading)return(
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',
+      flexDirection:'column',gap:12}}>
+      <div style={{fontSize:40}}>🏀</div>
+      <div style={{fontSize:13,color:'var(--tx2)'}}>Chargement...</div>
+    </div>
+  );
+
+  if(!authUser)return <LoginPageSb/>;
+
+  // Wrapper setPicks qui save aussi en base
+  const setPicsWrapped=(updaterOrObj)=>{
+    if(typeof updaterOrObj==='function'){
+      setPicks(prev=>{
+        const next=updaterOrObj(prev);
+        // Trouver le nouveau pick et le sauvegarder
+        Object.entries(next).forEach(([gid,pk])=>{
+          if(JSON.stringify(prev[gid])!==JSON.stringify(pk)){
+            sbSavePick(authUser.id,gid,pk.winner,pk.scorer);
+          }
+        });
+        return next;
+      });
+    } else {
+      Object.entries(updaterOrObj).forEach(([gid,pk])=>{
+        if(JSON.stringify(picks[gid])!==JSON.stringify(pk)){
+          sbSavePick(authUser.id,gid,pk.winner,pk.scorer);
+        }
+      });
+      setPicks(updaterOrObj);
+    }
+  };
 
   return(
     <div style={{maxWidth:430,margin:'0 auto',minHeight:'100vh',position:'relative'}}>
       {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
       <div style={{paddingBottom:64}}>
-        {page==='home'&&<HomePage picks={picks} championPick={championPick} setChampionPick={setChampionPick} toast={showToast} setPage={setPage} user={user}
+        {page==='home'&&<HomePage picks={picks} championPick={championPick}
+          setChampionPick={handleSetChampion} toast={showToast} setPage={setPage} user={authUser}
           setDetailGame={id=>{setDefaultDetail(id);setPage('matches');}}
           setPickGame={id=>{setDefaultPickGame(id);setPage('matches');}}/>}
-        {page==='matches'&&<MatchesPage picks={picks} setPicks={setPicks} toast={showToast} defaultDetail={defaultDetail} clearDefaultDetail={()=>setDefaultDetail(null)} defaultPickGame={defaultPickGame} clearDefaultPickGame={()=>setDefaultPickGame(null)}/>}
-        {page==='leagues'&&<LeaguesPage picks={picks} uid={uid}/>}
-        {page==='profile'&&<ProfilePage picks={picks} championPick={championPick} setChampionPick={setChampionPick} toast={showToast} user={user} onLogout={handleLogout}/>}
+        {page==='matches'&&<MatchesPage picks={picks} setPicks={setPicsWrapped} toast={showToast}
+          defaultDetail={defaultDetail} clearDefaultDetail={()=>setDefaultDetail(null)}
+          defaultPickGame={defaultPickGame} clearDefaultPickGame={()=>setDefaultPickGame(null)}/>}
+        {page==='leagues'&&<LeaguesPage picks={picks} userId={authUser?.id}/>}
+        {page==='profile'&&<ProfilePage picks={picks} championPick={championPick}
+          setChampionPick={handleSetChampion} toast={showToast} user={authUser} onLogout={handleLogout}/>}
       </div>
       <Nav page={page} setPage={setPage}/>
     </div>
