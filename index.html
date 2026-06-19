@@ -341,6 +341,33 @@ async function fetchESPNScores(){
     return{};
   }
 }
+// Fetch box score ESPN pour récupérer le top scorer d'un match terminé
+async function fetchESPNBoxScore(espnGameId){
+  if(!espnGameId)return null;
+  try{
+    const res=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${espnGameId}`);
+    const data=await res.json();
+    const boxscore=data?.boxscore;
+    if(!boxscore)return null;
+    // Parcourir les deux équipes pour trouver le joueur avec le plus de points
+    let topName=null,topPts=0;
+    (boxscore.players||[]).forEach(teamData=>{
+      const stats=teamData.statistics?.[0];
+      if(!stats)return;
+      const ptIdx=stats.labels?.indexOf('PTS');
+      if(ptIdx===-1||ptIdx===undefined)return;
+      (stats.athletes||[]).forEach(ath=>{
+        const pts=parseInt(ath.stats?.[ptIdx])||0;
+        if(pts>topPts){topPts=pts;topName=ath.athlete?.shortName||ath.athlete?.displayName||null;}
+      });
+    });
+    return topName?{name:topName,pts:topPts}:null;
+  }catch(e){
+    console.warn('[ESPN BoxScore] Erreur:',e);
+    return null;
+  }
+}
+
 // Résultat d'un pick
 function computeResult(game,pick){
   if(!pick||game.status!=='finished')return{pts:0,win_ok:false,scorer_ok:false};
@@ -1642,7 +1669,7 @@ function RankTab({members,onSelectMember}){
 /* ════════════════════════════════════════
    PROFILE PAGE
 ════════════════════════════════════════ */
-function ProfilePage({picks,championPick,setChampionPick,toast,user,onLogout}){
+function ProfilePage({picks,championPick,setChampionPick,toast,user,onLogout,onAdmin}){
   const [tab,setTab]=useState('stats');
   const playoffsStarted=ALL_GAMES.some(g=>g.status==='finished'||g.status==='live');
   const locked=!!championPick&&playoffsStarted;
@@ -1810,6 +1837,15 @@ function ProfilePage({picks,championPick,setChampionPick,toast,user,onLogout}){
 
       {/* ── Déconnexion ── */}
       <div style={{marginTop:24,paddingTop:16,borderTop:'1px solid var(--bd)'}}>
+        {/* Bouton admin — visible seulement pour toi */}
+        {user?.email===ADMIN_EMAIL&&(
+          <button onClick={onAdmin} style={{
+            width:'100%',padding:'11px 0',borderRadius:'var(--rads)',fontSize:12,fontWeight:700,
+            background:'rgba(168,85,247,.1)',color:'var(--j)',border:'1px solid rgba(168,85,247,.2)',
+            letterSpacing:.3,marginBottom:9,display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
+            ⚙️ Administration
+          </button>
+        )}
         <button onClick={onLogout} style={{
           width:'100%',padding:'11px 0',borderRadius:'var(--rads)',fontSize:12,fontWeight:700,
           background:'var(--rb)',color:'var(--r)',border:'1px solid rgba(239,68,68,.2)',
@@ -2021,6 +2057,400 @@ function LoginPageSb({onLogin}){
 }
 
 /* ════════════════════════════════════════
+   ADMIN PAGE
+   Visible seulement pour l'email admin
+════════════════════════════════════════ */
+const ADMIN_EMAIL='alexandre.gaudin74@gmail.com';// ← remplace par ton email
+
+function AdminPage({onBack,toast}){
+  const[view,setView]=useState('menu');// menu|add|edit
+  const[games,setGames]=useState([...ALL_GAMES]);
+  const[editGame,setEditGame]=useState(null);
+  // Form ajout
+  const[nHome,setNHome]=useState('OKC');
+  const[nAway,setNAway]=useState('MEM');
+  const[nSeries,setNSeries]=useState('w1');
+  const[nGameNum,setNGameNum]=useState(1);
+  const[nDate,setNDate]=useState('');
+  const[nTime,setNTime]=useState('');
+  const[nHomeOdds,setNHomeOdds]=useState('');
+  const[nAwayOdds,setNAwayOdds]=useState('');
+  const[saving,setSaving]=useState(false);
+
+  // Form edit
+  const[eStatus,setEStatus]=useState('');
+  const[eHs,setEHs]=useState('');
+  const[eAs,setEAs]=useState('');
+  const[eWinner,setEWinner]=useState('');
+  const[eTopScorer,setETopScorer]=useState('');
+  const[eTopPts,setETopPts]=useState('');
+  const[ePeriod,setEPeriod]=useState('');
+  const[eBdl,setEBdl]=useState('');
+
+  const teamCodes=Object.keys(TEAMS);
+  const seriesKeys=Object.keys(SERIES_META);
+
+  async function handleAddGame(){
+    if(!nDate||!nHomeOdds||!nAwayOdds)return;
+    setSaving(true);
+    const id=`${nSeries}g${nGameNum}`;
+    const payload={
+      id,series_id:nSeries,game_num:nGameNum,
+      date:nDate,time:nTime||null,
+      home:nHome,away:nAway,
+      home_odds:parseFloat(nHomeOdds),away_odds:parseFloat(nAwayOdds),
+      status:'upcoming',hs:0,as_:0,winner:null,period:null,
+      top_scorer:null,top_pts:null,bdl_game_id:null,
+      updated_at:new Date().toISOString()
+    };
+    const{error}=await sb.from('games').upsert(payload,{onConflict:'id'});
+    setSaving(false);
+    if(error){toast('Erreur : '+error.message);return;}
+    // Recharger
+    const newGames=await sbLoadGames();
+    rebuildGameIndex(newGames);
+    setGames([...ALL_GAMES]);
+    toast('Match ajouté ✓');
+    setView('menu');
+  }
+
+  function openEdit(g){
+    setEditGame(g);
+    setEStatus(g.status);
+    setEHs(String(g.hs||0));
+    setEAs(String(g.as_||g.as||0));
+    setEWinner(g.winner||'');
+    setETopScorer(g.top_scorer||'');
+    setETopPts(String(g.top_pts||''));
+    setEPeriod(g.period||'');
+    setEBdl(g.bdl_game_id||'');
+    setView('edit');
+  }
+
+  async function handleSaveEdit(){
+    if(!editGame)return;
+    setSaving(true);
+    const payload={
+      status:eStatus,
+      hs:parseInt(eHs)||0,
+      as_:parseInt(eAs)||0,
+      winner:eWinner||null,
+      top_scorer:eTopScorer||null,
+      top_pts:parseInt(eTopPts)||null,
+      period:ePeriod||null,
+      bdl_game_id:eBdl||null,
+      updated_at:new Date().toISOString()
+    };
+    const ok=await sbUpdateGame(editGame.id,payload);
+    setSaving(false);
+    if(!ok){toast('Erreur sauvegarde');return;}
+    // Recharger
+    const newGames=await sbLoadGames();
+    rebuildGameIndex(newGames);
+    setGames([...ALL_GAMES]);
+    toast('Match mis à jour ✓');
+    setView('menu');
+  }
+
+  // Vue : ajouter un match
+  if(view==='add')return(
+    <div style={{padding:'16px 15px 100px'}} className="fi">
+      <button onClick={()=>setView('menu')} style={{color:'var(--tx2)',marginBottom:14,fontSize:14}}>← Retour</button>
+      <div className="grot" style={{fontSize:19,fontWeight:700,marginBottom:16,color:'var(--o)'}}>⚙️ Ajouter un match</div>
+
+      {/* Série */}
+      <div style={{marginBottom:11}}>
+        <SecLabel>Série</SecLabel>
+        <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+          {seriesKeys.map(k=>{
+            const s=SERIES_META[k];
+            return(
+              <button key={k} onClick={()=>{setNSeries(k);setNHome(s.team1);setNAway(s.team2);}}
+                style={{padding:'5px 10px',borderRadius:'var(--rads)',fontSize:11,fontWeight:600,
+                  border:`1.5px solid ${nSeries===k?'var(--o)':'var(--bd)'}`,
+                  background:nSeries===k?'var(--ob)':'var(--dk2)',
+                  color:nSeries===k?'var(--o)':'var(--tx2)'}}>
+                {k.toUpperCase()} · {s.team1}–{s.team2}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Numéro de match */}
+      <div style={{marginBottom:11}}>
+        <SecLabel>Numéro de match</SecLabel>
+        <div style={{display:'flex',gap:5}}>
+          {[1,2,3,4,5,6,7].map(n=>(
+            <button key={n} onClick={()=>setNGameNum(n)}
+              style={{width:36,height:36,borderRadius:'var(--radxs)',fontWeight:700,fontSize:13,
+                border:`1.5px solid ${nGameNum===n?'var(--o)':'var(--bd)'}`,
+                background:nGameNum===n?'var(--ob)':'var(--dk2)',
+                color:nGameNum===n?'var(--o)':'var(--tx2)'}}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Équipes */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:11}}>
+        <div>
+          <SecLabel>Domicile</SecLabel>
+          <select value={nHome} onChange={e=>setNHome(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:'1px solid var(--bd)',color:'var(--tx)',fontSize:12,fontWeight:600}}>
+            {teamCodes.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <SecLabel>Extérieur</SecLabel>
+          <select value={nAway} onChange={e=>setNAway(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:'1px solid var(--bd)',color:'var(--tx)',fontSize:12,fontWeight:600}}>
+            {teamCodes.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Date & heure */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:11}}>
+        <div>
+          <SecLabel>Date</SecLabel>
+          <input type="date" value={nDate} onChange={e=>setNDate(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:'1px solid var(--bd)',color:'var(--tx)',fontSize:12}}/>
+        </div>
+        <div>
+          <SecLabel>Heure</SecLabel>
+          <input type="time" value={nTime} onChange={e=>setNTime(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:'1px solid var(--bd)',color:'var(--tx)',fontSize:12}}/>
+        </div>
+      </div>
+
+      {/* Cotes */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:16}}>
+        <div>
+          <SecLabel>Cote {nHome}</SecLabel>
+          <input type="number" step="0.01" placeholder="1.45" value={nHomeOdds}
+            onChange={e=>setNHomeOdds(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:`1px solid ${nHomeOdds?'var(--o)':'var(--bd)'}`,
+              color:'var(--tx)',fontSize:15,fontWeight:700}}/>
+        </div>
+        <div>
+          <SecLabel>Cote {nAway}</SecLabel>
+          <input type="number" step="0.01" placeholder="2.80" value={nAwayOdds}
+            onChange={e=>setNAwayOdds(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:`1px solid ${nAwayOdds?'var(--o)':'var(--bd)'}`,
+              color:'var(--tx)',fontSize:15,fontWeight:700}}/>
+        </div>
+      </div>
+
+      {/* Preview */}
+      {nDate&&nHomeOdds&&nAwayOdds&&(
+        <Card style={{marginBottom:14,background:'var(--ob)',borderColor:'rgba(255,92,26,.2)'}}>
+          <SecLabel>Aperçu</SecLabel>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+            <span>{nSeries.toUpperCase()} · Match {nGameNum}</span>
+            <span style={{color:'var(--tx2)'}}>{nDate} {nTime}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:6,fontSize:13,fontWeight:700}}>
+            <span>{nHome} <span style={{color:'var(--o)'}}>({nHomeOdds})</span></span>
+            <span style={{color:'var(--tx3)'}}>VS</span>
+            <span><span style={{color:'var(--o)'}}>({nAwayOdds})</span> {nAway}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:4,fontSize:11,color:'var(--tx2)'}}>
+            <span>+{Math.round(parseFloat(nHomeOdds||0)*10)} pts</span>
+            <span>+{Math.round(parseFloat(nAwayOdds||0)*10)} pts</span>
+          </div>
+          <div style={{fontSize:10,color:'var(--tx3)',marginTop:4}}>ID: {nSeries}g{nGameNum}</div>
+        </Card>
+      )}
+
+      <button disabled={saving||!nDate||!nHomeOdds||!nAwayOdds} onClick={handleAddGame}
+        style={{width:'100%',padding:14,borderRadius:'var(--rad)',fontWeight:700,fontSize:15,
+          background:(!saving&&nDate&&nHomeOdds&&nAwayOdds)?'var(--o)':'var(--bd)',
+          color:(!saving&&nDate&&nHomeOdds&&nAwayOdds)?'white':'var(--tx3)',
+          fontFamily:'Space Grotesk,sans-serif'}}>
+        {saving?'Enregistrement...':'Ajouter ce match →'}
+      </button>
+    </div>
+  );
+
+  // Vue : modifier un match
+  if(view==='edit'&&editGame)return(
+    <div style={{padding:'16px 15px 100px'}} className="fi">
+      <button onClick={()=>setView('menu')} style={{color:'var(--tx2)',marginBottom:14,fontSize:14}}>← Retour</button>
+      <div className="grot" style={{fontSize:19,fontWeight:700,marginBottom:4,color:'var(--o)'}}>✏️ Modifier le match</div>
+      <div style={{fontSize:12,color:'var(--tx2)',marginBottom:16}}>
+        {editGame.series_id?.toUpperCase()} · Match {editGame.game_num} · {editGame.home} vs {editGame.away}
+      </div>
+
+      {/* Statut */}
+      <div style={{marginBottom:11}}>
+        <SecLabel>Statut</SecLabel>
+        <div style={{display:'flex',gap:6}}>
+          {['upcoming','live','finished'].map(s=>(
+            <button key={s} onClick={()=>setEStatus(s)} style={{
+              flex:1,padding:'8px 0',borderRadius:'var(--rads)',fontSize:12,fontWeight:700,
+              border:`1.5px solid ${eStatus===s?(s==='live'?'var(--r)':s==='finished'?'var(--g)':'var(--o)'):'var(--bd)'}`,
+              background:eStatus===s?(s==='live'?'var(--rb)':s==='finished'?'var(--gb)':'var(--ob)'):'var(--dk2)',
+              color:eStatus===s?(s==='live'?'var(--r)':s==='finished'?'var(--g)':'var(--o)'):'var(--tx2)'}}>
+              {s==='upcoming'?'À venir':s==='live'?'🔴 Live':'✅ Terminé'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Scores */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9,marginBottom:11}}>
+        <div>
+          <SecLabel>{editGame.home} (Domicile)</SecLabel>
+          <input type="number" value={eHs} onChange={e=>setEHs(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:`1px solid ${eHs?'var(--o)':'var(--bd)'}`,
+              color:'var(--tx)',fontSize:20,fontWeight:700,textAlign:'center'}}/>
+        </div>
+        <div>
+          <SecLabel>{editGame.away} (Ext.)</SecLabel>
+          <input type="number" value={eAs} onChange={e=>setEAs(e.target.value)}
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:`1px solid ${eAs?'var(--o)':'var(--bd)'}`,
+              color:'var(--tx)',fontSize:20,fontWeight:700,textAlign:'center'}}/>
+        </div>
+      </div>
+
+      {/* Vainqueur — seulement si terminé */}
+      {eStatus==='finished'&&(
+        <div style={{marginBottom:11}}>
+          <SecLabel>Vainqueur</SecLabel>
+          <div style={{display:'flex',gap:6}}>
+            {[editGame.home,editGame.away].map(code=>(
+              <button key={code} onClick={()=>setEWinner(code)} style={{
+                flex:1,padding:'10px 0',borderRadius:'var(--rads)',fontWeight:700,fontSize:13,
+                border:`1.5px solid ${eWinner===code?'var(--g)':'var(--bd)'}`,
+                background:eWinner===code?'var(--gb)':'var(--dk2)',
+                color:eWinner===code?'var(--g)':'var(--tx2)'}}>
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Période (si live) */}
+      {eStatus==='live'&&(
+        <div style={{marginBottom:11}}>
+          <SecLabel>Période (ex: Q2 5:32)</SecLabel>
+          <input type="text" value={ePeriod} onChange={e=>setEPeriod(e.target.value)}
+            placeholder="Q2 5:32"
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:'1px solid var(--bd)',color:'var(--tx)',fontSize:13}}/>
+        </div>
+      )}
+
+      {/* Top scorer — seulement si terminé */}
+      {eStatus==='finished'&&(
+        <div style={{marginBottom:11}}>
+          <SecLabel>Top scoreur (nom court du joueur)</SecLabel>
+          <input type="text" value={eTopScorer} onChange={e=>setETopScorer(e.target.value)}
+            placeholder="ex: SGA"
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:`1px solid ${eTopScorer?'var(--gold)':'var(--bd)'}`,
+              color:'var(--tx)',fontSize:13,marginBottom:7}}/>
+          <SecLabel>Points marqués</SecLabel>
+          <input type="number" value={eTopPts} onChange={e=>setETopPts(e.target.value)}
+            placeholder="ex: 34"
+            style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+              background:'var(--dk2)',border:`1px solid ${eTopPts?'var(--gold)':'var(--bd)'}`,
+              color:'var(--tx)',fontSize:15,fontWeight:700}}/>
+          {/* Aide: liste des joueurs du match */}
+          <div style={{marginTop:8,fontSize:10,color:'var(--tx3)'}}>
+            Joueurs du match (IDs valides) :{' '}
+            {PLAYERS.filter(p=>p.team===editGame.home||p.team===editGame.away)
+              .map(p=><span key={p.id} style={{marginRight:4,color:'var(--tx2)'}}>{p.id}</span>)}
+          </div>
+        </div>
+      )}
+
+      {/* ESPN Game ID */}
+      <div style={{marginBottom:16}}>
+        <SecLabel>ESPN Game ID (pour top scorer auto)</SecLabel>
+        <input type="text" value={eBdl} onChange={e=>setEBdl(e.target.value)}
+          placeholder="ex: 401767855"
+          style={{width:'100%',padding:'9px 10px',borderRadius:'var(--rads)',
+            background:'var(--dk2)',border:'1px solid var(--bd)',color:'var(--tx)',fontSize:13}}/>
+        <div style={{fontSize:10,color:'var(--tx3)',marginTop:4}}>
+          Trouve l'ID sur ESPN : l'URL ressemble à .../401767855
+        </div>
+      </div>
+
+      <button disabled={saving} onClick={handleSaveEdit}
+        style={{width:'100%',padding:14,borderRadius:'var(--rad)',fontWeight:700,fontSize:15,
+          background:saving?'var(--bd)':'var(--o)',
+          color:saving?'var(--tx3)':'white',
+          fontFamily:'Space Grotesk,sans-serif'}}>
+        {saving?'Sauvegarde...':'Enregistrer les modifications →'}
+      </button>
+    </div>
+  );
+
+  // Vue : menu principal admin
+  return(
+    <div style={{padding:'18px 15px 88px'}} className="fi">
+      <button onClick={onBack} style={{color:'var(--tx2)',marginBottom:14,fontSize:14}}>← Retour au profil</button>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+        <div style={{fontSize:28}}>⚙️</div>
+        <div>
+          <div className="grot" style={{fontSize:21,fontWeight:700}}>Administration</div>
+          <div style={{fontSize:12,color:'var(--tx2)'}}>Gestion des matchs</div>
+        </div>
+      </div>
+
+      {/* Actions rapides */}
+      <Card style={{marginBottom:16,background:'var(--ob)',borderColor:'rgba(255,92,26,.2)'}}>
+        <button onClick={()=>setView('add')} style={{
+          width:'100%',padding:13,borderRadius:'var(--rads)',
+          background:'var(--o)',color:'white',fontWeight:700,fontSize:14,
+          display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+          ➕ Ajouter un nouveau match
+        </button>
+      </Card>
+
+      {/* Liste des matchs existants */}
+      <SecLabel style={{marginBottom:10}}>Matchs existants ({games.length})</SecLabel>
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {[...games].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(g=>{
+          const statusColor=g.status==='live'?'var(--r)':g.status==='finished'?'var(--g)':'var(--tx3)';
+          const statusLabel=g.status==='live'?'🔴 Live':g.status==='finished'?'✅ Terminé':'⏳ À venir';
+          return(
+            <Card key={g.id} onClick={()=>openEdit(g)} style={{cursor:'pointer'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:12}}>{g.series_id?.toUpperCase()} · Match {g.game_num}</div>
+                  <div style={{fontSize:11,color:'var(--tx2)',marginTop:1}}>
+                    <TeamBadge code={g.home} size={14}/> {g.home} {g.hs}–{g.as_||g.as||0} {g.away} <TeamBadge code={g.away} size={14}/>
+                  </div>
+                  <div style={{fontSize:9,color:'var(--tx3)',marginTop:2}}>{g.date}</div>
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:statusColor}}>{statusLabel}</div>
+                  {g.top_scorer&&<div style={{fontSize:9,color:'var(--gold)',marginTop:2}}>🏀 {g.top_scorer} {g.top_pts}pts</div>}
+                  <div style={{fontSize:10,color:'var(--tx3)',marginTop:4}}>Modifier →</div>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════
    APP — version Supabase
 ════════════════════════════════════════ */
 function App(){
@@ -2028,6 +2458,7 @@ function App(){
   const[loading,setLoading]=useState(true);
   const[gamesLoaded,setGamesLoaded]=useState(false);
   const[page,setPage]=useState('home');
+  const[adminMode,setAdminMode]=useState(false);
   const[picks,setPicks]=useState({});
   const[championPick,setChampionPick]=useState(null);
   const[defaultDetail,setDefaultDetail]=useState(null);
@@ -2059,14 +2490,33 @@ function App(){
       if(Object.keys(updates).length===0)return;
       // Appliquer les updates à ALL_GAMES + Supabase
       let changed=false;
+      const boxScorePromises=[];
       ALL_GAMES.forEach((g,i)=>{
         if(updates[g.id]){
+          const wasLive=g.status==='live';
+          const nowFinished=updates[g.id].status==='finished';
           ALL_GAMES[i]={...g,...updates[g.id]};
           changed=true;
-          // Sauvegarder dans Supabase
-          sbUpdateGame(g.id,updates[g.id]);
+          const updatePayload={...updates[g.id]};
+          // Si le match vient de se terminer et a un bdl_game_id ESPN, récupérer le top scorer
+          if(wasLive&&nowFinished&&g.bdl_game_id&&!g.top_scorer){
+            boxScorePromises.push(
+              fetchESPNBoxScore(g.bdl_game_id).then(scorer=>{
+                if(scorer){
+                  ALL_GAMES[i]={...ALL_GAMES[i],top_scorer:scorer.name,top_pts:scorer.pts};
+                  sbUpdateGame(g.id,{...updatePayload,top_scorer:scorer.name,top_pts:scorer.pts,updated_at:new Date().toISOString()});
+                } else {
+                  sbUpdateGame(g.id,updatePayload);
+                }
+              })
+            );
+          } else {
+            // Sauvegarder dans Supabase
+            sbUpdateGame(g.id,updatePayload);
+          }
         }
       });
+      if(boxScorePromises.length>0)await Promise.all(boxScorePromises);
       if(changed){
         rebuildGameIndex([...ALL_GAMES]);
         forceUpdate(n=>n+1);
@@ -2150,18 +2600,20 @@ function App(){
     <div style={{maxWidth:430,margin:'0 auto',minHeight:'100vh',position:'relative'}}>
       {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
       <div style={{paddingBottom:64}}>
-        {page==='home'&&<HomePage picks={picks} championPick={championPick}
+        {adminMode&&<AdminPage onBack={()=>setAdminMode(false)} toast={showToast}/>}
+        {!adminMode&&page==='home'&&<HomePage picks={picks} championPick={championPick}
           setChampionPick={handleSetChampion} toast={showToast} setPage={setPage} user={authUser}
           setDetailGame={id=>{setDefaultDetail(id);setPage('matches');}}
           setPickGame={id=>{setDefaultPickGame(id);setPage('matches');}}/>}
-        {page==='matches'&&<MatchesPage picks={picks} setPicks={setPicsWrapped} toast={showToast}
+        {!adminMode&&page==='matches'&&<MatchesPage picks={picks} setPicks={setPicsWrapped} toast={showToast}
           defaultDetail={defaultDetail} clearDefaultDetail={()=>setDefaultDetail(null)}
           defaultPickGame={defaultPickGame} clearDefaultPickGame={()=>setDefaultPickGame(null)}/>}
-        {page==='leagues'&&<LeaguesPage picks={picks} userId={authUser?.id}/>}
-        {page==='profile'&&<ProfilePage picks={picks} championPick={championPick}
-          setChampionPick={handleSetChampion} toast={showToast} user={authUser} onLogout={handleLogout}/>}
+        {!adminMode&&page==='leagues'&&<LeaguesPage picks={picks} userId={authUser?.id}/>}
+        {!adminMode&&page==='profile'&&<ProfilePage picks={picks} championPick={championPick}
+          setChampionPick={handleSetChampion} toast={showToast} user={authUser} onLogout={handleLogout}
+          onAdmin={()=>setAdminMode(true)}/>}
       </div>
-      <Nav page={page} setPage={setPage}/>
+      {!adminMode&&<Nav page={page} setPage={setPage}/>}
     </div>
   );
 }
