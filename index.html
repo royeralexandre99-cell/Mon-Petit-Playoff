@@ -222,182 +222,125 @@ const PLAYERS=[
 ];
 
 /* ════════════════════════════════════════
-   MATCHS — Simulation premier tour en cours
-   On se place au 25 avril 2025 (1er tour pas fini)
+   SÉRIES — métadonnées statiques (conf, équipes)
+   Les matchs eux viennent de Supabase
 ════════════════════════════════════════ */
-const SERIES=[
-  // EST 1er tour
-  {id:'e1',conf:'Est',round:'1er Tour',team1:'CLE',team2:'MIA',
-   wins1:3,wins2:1,status:'ongoing',best_of:7,
-   games:[
-     {id:'e1g1',date:'2025-04-19',status:'finished',home:'CLE',away:'MIA',
-      home_odds:1.28,away_odds:3.80,hs:114,as:99,winner:'CLE',top_scorer:'mitchell',top_pts:28,
-      home_scr:['mitchell','garland','mobley','allen_j','strus','george_s'],
-      away_scr:['butler','herro','adebayo','lowry','highsmith','love']},
-     {id:'e1g2',date:'2025-04-22',status:'finished',home:'CLE',away:'MIA',
-      home_odds:1.28,away_odds:3.80,hs:108,as:95,winner:'CLE',top_scorer:'garland',top_pts:26,
-      home_scr:['mitchell','garland','mobley','allen_j','strus','george_s'],
-      away_scr:['butler','herro','adebayo','lowry','highsmith','love']},
-     {id:'e1g3',date:'2025-04-24',status:'finished',home:'MIA',away:'CLE',
-      home_odds:3.40,away_odds:1.32,hs:102,as:94,winner:'MIA',top_scorer:'butler',top_pts:24,
-      home_scr:['butler','herro','adebayo','lowry','highsmith','love'],
-      away_scr:['mitchell','garland','mobley','allen_j','strus','george_s']},
-     {id:'e1g4',date:'2025-04-26',time:'21:30',status:'live',home:'MIA',away:'CLE',
-      home_odds:3.40,away_odds:1.32,hs:78,as:81,period:'Q3 4:12',
-      home_scr:['butler','herro','adebayo','lowry','highsmith','love'],
-      away_scr:['mitchell','garland','mobley','allen_j','strus','george_s']},
-   ]},
-  {id:'e2',conf:'Est',round:'1er Tour',team1:'BOS',team2:'ORL',
-   wins1:3,wins2:0,status:'ongoing',best_of:7,
-   games:[
-     {id:'e2g1',date:'2025-04-20',status:'finished',home:'BOS',away:'ORL',
-      home_odds:1.22,away_odds:4.50,hs:119,as:96,winner:'BOS',top_scorer:'tatum',top_pts:32,
-      home_scr:['tatum','brown_j','white','holiday','porzingis','hauser'],
-      away_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g']},
-     {id:'e2g2',date:'2025-04-23',status:'finished',home:'BOS',away:'ORL',
-      home_odds:1.22,away_odds:4.50,hs:106,as:89,winner:'BOS',top_scorer:'brown_j',top_pts:25,
-      home_scr:['tatum','brown_j','white','holiday','porzingis','hauser'],
-      away_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g']},
-     {id:'e2g3',date:'2025-04-25',status:'finished',home:'ORL',away:'BOS',
-      home_odds:4.00,away_odds:1.25,hs:94,as:110,winner:'BOS',top_scorer:'tatum',top_pts:27,
-      home_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g'],
-      away_scr:['tatum','brown_j','white','holiday','porzingis','hauser']},
-     {id:'e2g4',date:'2025-04-27',time:'19:00',status:'upcoming',home:'ORL',away:'BOS',
-      home_odds:4.00,away_odds:1.25,
-      home_scr:['banchero','wagner_f','fultz','suggs','carter_w','harris_g'],
-      away_scr:['tatum','brown_j','white','holiday','porzingis','hauser']},
-   ]},
-  {id:'e3',conf:'Est',round:'1er Tour',team1:'NYK',team2:'DET',
-   wins1:2,wins2:2,status:'ongoing',best_of:7,
-   games:[
-     {id:'e3g1',date:'2025-04-20',status:'finished',home:'NYK',away:'DET',
-      home_odds:1.45,away_odds:2.75,hs:118,as:112,winner:'NYK',top_scorer:'brunson',top_pts:29,
-      home_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride'],
-      away_scr:['cunningham','ivey','duren','stewart','tobias','boyden']},
-     {id:'e3g2',date:'2025-04-23',status:'finished',home:'NYK',away:'DET',
-      home_odds:1.45,away_odds:2.75,hs:97,as:105,winner:'DET',top_scorer:'brunson',top_pts:21,
-      home_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride'],
-      away_scr:['cunningham','ivey','duren','stewart','tobias','boyden']},
-     {id:'e3g3',date:'2025-04-25',status:'finished',home:'DET',away:'NYK',
-      home_odds:2.60,away_odds:1.52,hs:114,as:121,winner:'NYK',top_scorer:'brunson',top_pts:31,
-      home_scr:['cunningham','ivey','duren','stewart','tobias','boyden'],
-      away_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride']},
-     {id:'e3g4',date:'2025-04-27',time:'21:30',status:'upcoming',home:'DET',away:'NYK',
-      home_odds:2.60,away_odds:1.52,
-      home_scr:['cunningham','ivey','duren','stewart','tobias','boyden'],
-      away_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride']},
-     {id:'e3g5',date:'2025-04-29',time:'21:00',status:'upcoming',home:'NYK',away:'DET',
-      home_odds:1.55,away_odds:2.45,
-      home_scr:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride'],
-      away_scr:['cunningham','ivey','duren','stewart','tobias','boyden']},
-   ]},
-  {id:'e4',conf:'Est',round:'1er Tour',team1:'IND',team2:'MIL',
-   wins1:2,wins2:1,status:'ongoing',best_of:7,
-   games:[
-     {id:'e4g1',date:'2025-04-19',status:'finished',home:'IND',away:'MIL',
-      home_odds:1.72,away_odds:2.15,hs:122,as:119,winner:'IND',top_scorer:'siakam',top_pts:28,
-      home_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard'],
-      away_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez']},
-     {id:'e4g2',date:'2025-04-22',status:'finished',home:'IND',away:'MIL',
-      home_odds:1.72,away_odds:2.15,hs:109,as:115,winner:'MIL',top_scorer:'antetokounmpo',top_pts:35,
-      home_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard'],
-      away_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez']},
-     {id:'e4g3',date:'2025-04-25',status:'finished',home:'MIL',away:'IND',
-      home_odds:2.05,away_odds:1.78,hs:108,as:114,winner:'IND',top_scorer:'haliburton',top_pts:24,
-      home_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez'],
-      away_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard']},
-     {id:'e4g4',date:'2025-04-27',time:'19:30',status:'upcoming',home:'MIL',away:'IND',
-      home_odds:2.05,away_odds:1.78,
-      home_scr:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez'],
-      away_scr:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard']},
-   ]},
-  // OUEST 1er tour
-  {id:'w1',conf:'Ouest',round:'1er Tour',team1:'OKC',team2:'MEM',
-   wins1:3,wins2:1,status:'ongoing',best_of:7,
-   games:[
-     {id:'w1g1',date:'2025-04-19',status:'finished',home:'OKC',away:'MEM',
-      home_odds:1.20,away_odds:5.00,hs:118,as:103,winner:'OKC',top_scorer:'sga',top_pts:35,
-      home_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous'],
-      away_scr:['ja','bane','smart','adams','jackson_z','ziaire']},
-     {id:'w1g2',date:'2025-04-22',status:'finished',home:'OKC',away:'MEM',
-      home_odds:1.20,away_odds:5.00,hs:124,as:110,winner:'OKC',top_scorer:'sga',top_pts:28,
-      home_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous'],
-      away_scr:['ja','bane','smart','adams','jackson_z','ziaire']},
-     {id:'w1g3',date:'2025-04-24',status:'finished',home:'MEM',away:'OKC',
-      home_odds:4.50,away_odds:1.22,hs:119,as:110,winner:'MEM',top_scorer:'ja',top_pts:31,
-      home_scr:['ja','bane','smart','adams','jackson_z','ziaire'],
-      away_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous']},
-     {id:'w1g4',date:'2025-04-26',time:'22:00',status:'live',home:'MEM',away:'OKC',
-      home_odds:4.50,away_odds:1.22,hs:88,as:91,period:'Q4 2:05',
-      home_scr:['ja','bane','smart','adams','jackson_z','ziaire'],
-      away_scr:['sga','jalen_w','holmgren','dort','caruso','gilgeous']},
-   ]},
-  {id:'w2',conf:'Ouest',round:'1er Tour',team1:'LAC',team2:'DEN',
-   wins1:1,wins2:2,status:'ongoing',best_of:7,
-   games:[
-     {id:'w2g1',date:'2025-04-20',status:'finished',home:'LAC',away:'DEN',
-      home_odds:2.10,away_odds:1.75,hs:111,as:105,winner:'LAC',top_scorer:'jokic',top_pts:27,
-      home_scr:['george','harden'],away_scr:['jokic','murray','porter']},
-     {id:'w2g2',date:'2025-04-23',status:'finished',home:'LAC',away:'DEN',
-      home_odds:2.10,away_odds:1.75,hs:94,as:112,winner:'DEN',top_scorer:'jokic',top_pts:34,
-      home_scr:['george','harden'],away_scr:['jokic','murray','porter']},
-     {id:'w2g3',date:'2025-04-26',status:'finished',home:'DEN',away:'LAC',
-      home_odds:1.72,away_odds:2.15,hs:108,as:103,winner:'DEN',top_scorer:'murray',top_pts:26,
-      home_scr:['jokic','murray','porter'],away_scr:['george','harden']},
-     {id:'w2g4',date:'2025-04-28',time:'22:00',status:'upcoming',home:'DEN',away:'LAC',
-      home_odds:1.65,away_odds:2.28,
-      home_scr:['jokic','murray','porter'],away_scr:['george','harden']},
-   ]},
-  {id:'w3',conf:'Ouest',round:'1er Tour',team1:'HOU',team2:'GSW',
-   wins1:2,wins2:2,status:'ongoing',best_of:7,
-   games:[
-     {id:'w3g1',date:'2025-04-20',status:'finished',home:'HOU',away:'GSW',
-      home_odds:1.75,away_odds:2.10,hs:129,as:118,winner:'HOU',top_scorer:'curry',top_pts:33,
-      home_scr:['green_j','sengun'],away_scr:['curry','thompson']},
-     {id:'w3g2',date:'2025-04-23',status:'finished',home:'HOU',away:'GSW',
-      home_odds:1.75,away_odds:2.10,hs:105,as:112,winner:'GSW',top_scorer:'curry',top_pts:30,
-      home_scr:['green_j','sengun'],away_scr:['curry','thompson']},
-     {id:'w3g3',date:'2025-04-25',status:'finished',home:'GSW',away:'HOU',
-      home_odds:2.00,away_odds:1.85,hs:108,as:113,winner:'HOU',top_scorer:'green_j',top_pts:27,
-      home_scr:['curry','thompson'],away_scr:['green_j','sengun']},
-     {id:'w3g4',date:'2025-04-27',time:'22:00',status:'upcoming',home:'GSW',away:'HOU',
-      home_odds:2.00,away_odds:1.85,
-      home_scr:['curry','thompson'],away_scr:['green_j','sengun']},
-     {id:'w3g5',date:'2025-04-29',time:'22:30',status:'upcoming',home:'HOU',away:'GSW',
-      home_odds:1.80,away_odds:2.05,
-      home_scr:['green_j','sengun'],away_scr:['curry','thompson']},
-   ]},
-  {id:'w4',conf:'Ouest',round:'1er Tour',team1:'MIN',team2:'LAL',
-   wins1:3,wins2:1,status:'ongoing',best_of:7,
-   games:[
-     {id:'w4g1',date:'2025-04-19',status:'finished',home:'MIN',away:'LAL',
-      home_odds:1.55,away_odds:2.45,hs:117,as:108,winner:'MIN',top_scorer:'edwards',top_pts:26,
-      home_scr:['edwards','randle','jmc','gobert'],away_scr:['lebron','davis','reaves']},
-     {id:'w4g2',date:'2025-04-22',status:'finished',home:'MIN',away:'LAL',
-      home_odds:1.55,away_odds:2.45,hs:100,as:87,winner:'MIN',top_scorer:'edwards',top_pts:22,
-      home_scr:['edwards','randle','jmc','gobert'],away_scr:['lebron','davis','reaves']},
-     {id:'w4g3',date:'2025-04-25',status:'finished',home:'LAL',away:'MIN',
-      home_odds:2.40,away_odds:1.58,hs:116,as:109,winner:'LAL',top_scorer:'lebron',top_pts:28,
-      home_scr:['lebron','davis','reaves'],away_scr:['edwards','randle','jmc','gobert']},
-     {id:'w4g4',date:'2025-04-27',time:'20:00',status:'upcoming',home:'LAL',away:'MIN',
-      home_odds:2.40,away_odds:1.58,
-      home_scr:['lebron','davis','reaves'],away_scr:['edwards','randle','jmc','gobert']},
-   ]},
-];
+const SERIES_META={
+  e1:{id:'e1',conf:'Est',round:'1er Tour',team1:'CLE',team2:'MIA',best_of:7,
+    home_scr:{CLE:['mitchell','garland','mobley','allen_j','strus','george_s'],MIA:['butler','herro','adebayo','lowry','highsmith','love']}},
+  e2:{id:'e2',conf:'Est',round:'1er Tour',team1:'BOS',team2:'ORL',best_of:7,
+    home_scr:{BOS:['tatum','brown_j','white','holiday','porzingis','hauser'],ORL:['banchero','wagner_f','fultz','suggs','carter_w','harris_g']}},
+  e3:{id:'e3',conf:'Est',round:'1er Tour',team1:'NYK',team2:'DET',best_of:7,
+    home_scr:{NYK:['brunson','bridges_m','hart','anunoby','Towns_k','mcbride'],DET:['cunningham','ivey','duren','stewart','tobias','boyden']}},
+  e4:{id:'e4',conf:'Est',round:'1er Tour',team1:'IND',team2:'MIL',best_of:7,
+    home_scr:{IND:['haliburton','siakam','mathurin','mcconnell','toppin','nembhard'],MIL:['antetokounmpo','lillard','portis','middleton','brooks_d','lopez']}},
+  w1:{id:'w1',conf:'Ouest',round:'1er Tour',team1:'OKC',team2:'MEM',best_of:7,
+    home_scr:{OKC:['sga','jalen_w','holmgren','dort','caruso','gilgeous'],MEM:['ja','bane','smart','adams','jackson_z','ziaire']}},
+  w2:{id:'w2',conf:'Ouest',round:'1er Tour',team1:'LAC',team2:'DEN',best_of:7,
+    home_scr:{LAC:['george','harden','zubac','batum','mann','westbrook'],DEN:['jokic','murray','porter','gordon','braun','rivers']}},
+  w3:{id:'w3',conf:'Ouest',round:'1er Tour',team1:'HOU',team2:'GSW',best_of:7,
+    home_scr:{HOU:['green_j','sengun','amen','brooks_g','jabari','vvj'],GSW:['curry','thompson','green_d','kuminga','podz','wiggins']}},
+  w4:{id:'w4',conf:'Ouest',round:'1er Tour',team1:'MIN',team2:'LAL',best_of:7,
+    home_scr:{MIN:['edwards','randle','jmc','gobert','reid','conley'],LAL:['lebron','davis','reaves','hachimura','hayes','vincent']}},
+};
 
-// Flatten tous les matchs
-const ALL_GAMES=SERIES.flatMap(s=>s.games.map((g,i)=>({...g,game_num:i+1,series_id:s.id,series:s})));
+// Helper pour enrichir un match brut depuis Supabase avec les métadonnées série
+function enrichGame(g){
+  const s=SERIES_META[g.series_id]||{};
+  const homeScr=s.home_scr?s.home_scr[g.home]||[]:[];
+  const awayScr=s.home_scr?s.home_scr[g.away]||[]:[];
+  return{
+    ...g,
+    as:g.as_,// Supabase stocke 'as_' car 'as' est un mot réservé SQL
+    series:s,
+    home_scr:homeScr,
+    away_scr:awayScr,
+  };
+}
 
-// Grouper par date
-const GAMES_BY_DATE={};
-ALL_GAMES.forEach(g=>{
-  if(!GAMES_BY_DATE[g.date])GAMES_BY_DATE[g.date]=[];
-  GAMES_BY_DATE[g.date].push(g);
-});
-const ALL_DATES=Object.keys(GAMES_BY_DATE).sort();
+// Charger les matchs depuis Supabase
+async function sbLoadGames(){
+  const{data,error}=await sb.from('games').select('*').order('date').order('game_num');
+  if(error||!data)return[];
+  return data.map(enrichGame);
+}
 
+// Mettre à jour un match (page admin)
+async function sbUpdateGame(gameId,updates){
+  const{error}=await sb.from('games').update({...updates,updated_at:new Date().toISOString()}).eq('id',gameId);
+  return!error;
+}
 
+/* ════════════════════════════════════════
+   MATCHS — chargés depuis Supabase au démarrage
+   ALL_GAMES et GAMES_BY_DATE sont initialisés vides
+   puis remplis par loadGames() dans App()
+════════════════════════════════════════ */
+let ALL_GAMES=[];
+let GAMES_BY_DATE={};
+let ALL_DATES=[];
 
+function rebuildGameIndex(games){
+  ALL_GAMES=games;
+  GAMES_BY_DATE={};
+  games.forEach(g=>{
+    if(!GAMES_BY_DATE[g.date])GAMES_BY_DATE[g.date]=[];
+    GAMES_BY_DATE[g.date].push(g);
+  });
+  ALL_DATES=Object.keys(GAMES_BY_DATE).sort();
+}
+
+/* ════════════════════════════════════════
+   ESPN API — scores en temps réel
+════════════════════════════════════════ */
+// Mapping abréviations ESPN → codes internes
+const ESPN_TEAM_MAP={
+  'OKC':'OKC','IND':'IND','MIN':'MIN','NY':'NYK','BOS':'BOS','CLE':'CLE',
+  'DEN':'DEN','GS':'GSW','LAL':'LAL','MEM':'MEM','MIA':'MIA','MIL':'MIL',
+  'ORL':'ORL','DET':'DET','LAC':'LAC','HOU':'HOU'
+};
+
+async function fetchESPNScores(){
+  try{
+    const res=await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard');
+    const data=await res.json();
+    const events=data?.events||[];
+    const updates={};
+    events.forEach(ev=>{
+      const comp=ev.competitions?.[0];
+      if(!comp)return;
+      const home=comp.competitors?.find(c=>c.homeAway==='home');
+      const away=comp.competitors?.find(c=>c.homeAway==='away');
+      if(!home||!away)return;
+      const homeCode=ESPN_TEAM_MAP[home.team?.abbreviation];
+      const awayCode=ESPN_TEAM_MAP[away.team?.abbreviation];
+      if(!homeCode||!awayCode)return;
+      // Trouver le match correspondant dans ALL_GAMES
+      const game=ALL_GAMES.find(g=>g.home===homeCode&&g.away===awayCode&&
+        (g.status==='live'||g.status==='upcoming'));
+      if(!game)return;
+      const stateType=comp.status?.type?.name;
+      let status=game.status;
+      if(stateType==='STATUS_IN_PROGRESS')status='live';
+      else if(stateType==='STATUS_FINAL')status='finished';
+      const period=comp.status?.period;
+      const clock=comp.status?.displayClock;
+      updates[game.id]={
+        hs:parseInt(home.score)||game.hs||0,
+        as_:parseInt(away.score)||game.as||0,
+        status,
+        period:status==='live'?`Q${period} ${clock}`:(game.period||null),
+        winner:status==='finished'
+          ?(parseInt(home.score)>parseInt(away.score)?homeCode:awayCode)
+          :game.winner,
+      };
+    });
+    return updates;
+  }catch(e){
+    console.warn('[ESPN] Erreur fetch:',e);
+    return{};
+  }
+}
 // Résultat d'un pick
 function computeResult(game,pick){
   if(!pick||game.status!=='finished')return{pts:0,win_ok:false,scorer_ok:false};
@@ -2083,20 +2026,62 @@ function LoginPageSb({onLogin}){
 function App(){
   const[authUser,setAuthUser]=useState(null);
   const[loading,setLoading]=useState(true);
+  const[gamesLoaded,setGamesLoaded]=useState(false);
   const[page,setPage]=useState('home');
   const[picks,setPicks]=useState({});
   const[championPick,setChampionPick]=useState(null);
   const[defaultDetail,setDefaultDetail]=useState(null);
   const[defaultPickGame,setDefaultPickGame]=useState(null);
   const[toast,setToast]=useState(null);
+  const[,forceUpdate]=useState(0);// pour re-render quand ALL_GAMES change
   const showToast=useCallback(m=>setToast(m),[]);
+
+  // ── Charger les matchs depuis Supabase ─────
+  useEffect(()=>{
+    async function loadGames(){
+      const games=await sbLoadGames();
+      if(games.length>0){
+        rebuildGameIndex(games);
+        setGamesLoaded(true);
+        forceUpdate(n=>n+1);
+      }
+    }
+    loadGames();
+  },[]);
+
+  // ── Polling ESPN toutes les 30s si match live ──
+  useEffect(()=>{
+    if(!gamesLoaded)return;
+    async function pollESPN(){
+      const hasLive=ALL_GAMES.some(g=>g.status==='live');
+      if(!hasLive)return;
+      const updates=await fetchESPNScores();
+      if(Object.keys(updates).length===0)return;
+      // Appliquer les updates à ALL_GAMES + Supabase
+      let changed=false;
+      ALL_GAMES.forEach((g,i)=>{
+        if(updates[g.id]){
+          ALL_GAMES[i]={...g,...updates[g.id]};
+          changed=true;
+          // Sauvegarder dans Supabase
+          sbUpdateGame(g.id,updates[g.id]);
+        }
+      });
+      if(changed){
+        rebuildGameIndex([...ALL_GAMES]);
+        forceUpdate(n=>n+1);
+      }
+    }
+    pollESPN();
+    const timer=setInterval(pollESPN,30000);
+    return()=>clearInterval(timer);
+  },[gamesLoaded]);
 
   // ── Écouter la session Supabase ────────────
   useEffect(()=>{
     const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,session)=>{
       if(session?.user){
         const u=session.user;
-        // Charger ou créer le profil
         let{data:profile}=await sb.from('users').select('*').eq('id',u.id).maybeSingle();
         if(!profile){
           const name=u.user_metadata?.full_name||u.email?.split('@')[0]||'Joueur';
@@ -2104,7 +2089,6 @@ function App(){
           profile={id:u.id,name};
         }
         setAuthUser({...u,name:profile.name,avatar_color:profile.avatar_color||'#FF5C1A'});
-        // Charger picks + champion en parallèle
         const[p,c]=await Promise.all([sbLoadPicks(u.id),sbLoadChampion(u.id)]);
         setPicks(p);
         setChampionPick(c);
@@ -2119,20 +2103,6 @@ function App(){
   },[]);
 
   // ── Sauvegarder un pick ────────────────────
-  const handleSetPicks=useCallback((updater)=>{
-    setPicks(prev=>{
-      const next=typeof updater==='function'?updater(prev):updater;
-      return next;
-    });
-  },[]);
-
-  const handleSavePick=useCallback(async(gameId,winner,scorer)=>{
-    if(!authUser)return;
-    setPicks(prev=>({...prev,[gameId]:{winner,scorer}}));
-    await sbSavePick(authUser.id,gameId,winner,scorer);
-  },[authUser]);
-
-  // ── Sauvegarder le champion ────────────────
   const handleSetChampion=useCallback(async(teamCode)=>{
     if(!authUser)return;
     setChampionPick(teamCode);
@@ -2145,22 +2115,20 @@ function App(){
     setPage('home');
   },[]);
 
-  if(loading)return(
+  if(loading||!gamesLoaded)return(
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',
       flexDirection:'column',gap:12}}>
       <div style={{fontSize:40}}>🏀</div>
-      <div style={{fontSize:13,color:'var(--tx2)'}}>Chargement...</div>
+      <div style={{fontSize:13,color:'var(--tx2)'}}>Chargement des matchs...</div>
     </div>
   );
 
   if(!authUser)return <LoginPageSb/>;
 
-  // Wrapper setPicks qui save aussi en base
   const setPicsWrapped=(updaterOrObj)=>{
     if(typeof updaterOrObj==='function'){
       setPicks(prev=>{
         const next=updaterOrObj(prev);
-        // Trouver le nouveau pick et le sauvegarder
         Object.entries(next).forEach(([gid,pk])=>{
           if(JSON.stringify(prev[gid])!==JSON.stringify(pk)){
             sbSavePick(authUser.id,gid,pk.winner,pk.scorer);
