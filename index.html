@@ -4,6 +4,18 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Mon Petit Playoff 🏀</title>
+
+<!-- PWA -->
+<meta name="application-name" content="Mon Petit Playoff"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Playoff"/>
+<meta name="theme-color" content="#0D0D0D"/>
+<meta name="description" content="Pronos NBA playoffs entre amis"/>
+<link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22Mon%20Petit%20Playoff%22%2C%22short_name%22%3A%22Playoff%22%2C%22description%22%3A%22Pronos%20NBA%20playoffs%20entre%20amis%22%2C%22start_url%22%3A%22%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230D0D0D%22%2C%22theme_color%22%3A%22%230D0D0D%22%2C%22orientation%22%3A%22portrait%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%3D%2527http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%2527%2520viewBox%3D%270%200%20100%20100%2527%253E%253Ctext%2520y%3D%2527.9em%2527%2520font-size%3D%252790%2527%253E%25F0%259F%2592%25A5%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22any%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D"/>
+<!-- Apple touch icon SVG inline -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230D0D0D'/><text y='.85em' x='50%25' text-anchor='middle' font-size='62'>🏀</text></svg>"/>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -2618,6 +2630,49 @@ function App(){
   );
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+<!-- Service Worker PWA — cache offline -->
+<script>
+if('serviceWorker' in navigator){
+  // Inline service worker via blob
+  const swCode=`
+    const CACHE='mpp-v1';
+    const ASSETS=['/'];
+    self.addEventListener('install',e=>{
+      e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
+      self.skipWaiting();
+    });
+    self.addEventListener('activate',e=>{
+      e.waitUntil(caches.keys().then(keys=>Promise.all(
+        keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))
+      )));
+      self.clients.claim();
+    });
+    self.addEventListener('fetch',e=>{
+      // Pour les requêtes API (Supabase, ESPN) → toujours réseau
+      if(e.request.url.includes('supabase.co')||e.request.url.includes('espn.com')){
+        e.respondWith(fetch(e.request).catch(()=>new Response('',{status:503})));
+        return;
+      }
+      // Pour le reste → cache first, fallback réseau
+      e.respondWith(
+        caches.match(e.request).then(cached=>cached||fetch(e.request).then(res=>{
+          if(res.ok){
+            const clone=res.clone();
+            caches.open(CACHE).then(c=>c.put(e.request,clone));
+          }
+          return res;
+        }))
+      );
+    });
+  `;
+  const blob=new Blob([swCode],{type:'application/javascript'});
+  const swUrl=URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl,{scope:'/'})
+    .then(()=>console.log('[PWA] Service worker enregistré'))
+    .catch(e=>console.warn('[PWA] Erreur SW:',e));
+}
 </script>
 </body>
 </html>
